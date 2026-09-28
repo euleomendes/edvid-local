@@ -163,6 +163,13 @@ function drawOptions() {
   if (visSubScaleRange && document.activeElement !== visSubScaleRange) visSubScaleRange.value = subPct;
   if (visSubScaleVal) visSubScaleVal.textContent = `${subPct}%`;
 
+  // Sincroniza controle dedicado de tamanho da headline na aba visual
+  const visHlScaleRange = $("#visualHlScaleRange");
+  const visHlScaleVal = $("#visualHlScaleVal");
+  const hlPct = Math.round((S.hlScale || 1.0) * 100);
+  if (visHlScaleRange && document.activeElement !== visHlScaleRange) visHlScaleRange.value = hlPct;
+  if (visHlScaleVal) visHlScaleVal.textContent = `${hlPct}%`;
+
   // Sincroniza botões de formatação clássica da headline (B, I, U, TT)
   ["btnHlBold", "btnVisualHlBold"].forEach(id => { const el = $("#" + id); if (el) el.classList.toggle("on", !!S.hlBold); });
   ["btnHlItalic", "btnVisualHlItalic"].forEach(id => { const el = $("#" + id); if (el) el.classList.toggle("on", !!S.hlItalic); });
@@ -1088,12 +1095,12 @@ const tl_seek = e => {
 // Resposta visual 100% instantânea em tempo real (cima, baixo e lados)
 // ========================================================
 function applyObjectPositions() {
-  const camX = 100 - (S.framingX !== undefined ? S.framingX : 50);
+  const camX = S.framingX !== undefined ? S.framingX : 50;
   const camY = S.framingY !== undefined ? S.framingY : 10;
   if (pv) pv.style.objectPosition = `${camX}% ${camY}%`;
   if (prevPlayer) prevPlayer.style.objectPosition = `${camX}% ${camY}%`;
 
-  const medX = 100 - (S.framingX2 !== undefined ? S.framingX2 : 50);
+  const medX = S.framingX2 !== undefined ? S.framingX2 : 50;
   const medY = S.framingY2 !== undefined ? S.framingY2 : 50;
   const medImg = $("#pvMediaImg"), medVid = $("#pvMediaVideo");
   if (medImg) medImg.style.objectPosition = `${medX}% ${medY}%`;
@@ -1362,8 +1369,8 @@ function enable2DFramingDrag() {
     const deltaX = Math.round(dx / 2.5);
     const deltaY = Math.round(dy / 2.5);
 
-    const newX = Math.max(0, Math.min(100, startValX - deltaX));
-    const newY = Math.max(0, Math.min(100, startValY + deltaY));
+    const newX = Math.max(0, Math.min(100, Math.round(startValX - deltaX)));
+    const newY = Math.max(0, Math.min(100, Math.round(startValY - deltaY)));
 
     if (activeTarget === "camera") {
       setFraming(newX, newY);
@@ -1472,12 +1479,23 @@ function updateHeadlineOverlay() {
   const isFileMode = S.hlMode === "file";
 
   overlay.style.display = "flex";
-  overlay.style.left = (S.hlPosX !== undefined ? S.hlPosX : 50) + "%";
-  overlay.style.top = (S.hlPosY !== undefined ? S.hlPosY : 22.5) + "%";
+  if (!overlay.classList.contains("is-dragging")) {
+    overlay.style.left = (S.hlPosX !== undefined ? S.hlPosX : 50) + "%";
+    overlay.style.top = (S.hlPosY !== undefined ? S.hlPosY : 22.5) + "%";
+  }
+  // Escala sempre rigorosamente vinculada a S.hlScale
   overlay.style.transform = `translate(-50%, -50%) scale(${S.hlScale || 1.0})`;
 
+  const curPct = Math.round((S.hlScale || 1.0) * 100);
+  const visualRange = $("#visualHlScaleRange");
+  if (visualRange && document.activeElement !== visualRange && +visualRange.value !== curPct) {
+    visualRange.value = curPct;
+  }
+  const visualVal = $("#visualHlScaleVal");
+  if (visualVal) visualVal.textContent = `${curPct}%`;
+
   const scaleLbl = $("#hlScaleLabel");
-  if (scaleLbl) scaleLbl.textContent = `${Math.round((S.hlScale || 1.0) * 100)}%`;
+  if (scaleLbl) scaleLbl.textContent = `${curPct}%`;
 
   const tplImg = $("#hlTemplateOverlayImg");
   const textSpan = $("#hlPreviewText");
@@ -1499,7 +1517,8 @@ function updateHeadlineOverlay() {
       if (textSpan) {
         textSpan.textContent = "📁 SUBA UM MODELO DE HEADLINE";
         textSpan.style.display = "block";
-        textSpan.style.fontSize = "12px";
+        textSpan.className = "hl-preview-text";
+        textSpan.style.fontSize = "3.8cqw";
         textSpan.style.color = "#ffae66";
         textSpan.style.fontWeight = "700";
         textSpan.style.letterSpacing = "0.5px";
@@ -1517,28 +1536,20 @@ function updateHeadlineOverlay() {
       textSpan.textContent = S.hlUppercase ? textToDisplay.toUpperCase() : textToDisplay;
       textSpan.style.display = "block";
 
+      const hlStyle = S.hl || "bebas_impact";
+      textSpan.className = "hl-preview-text hl-style-" + hlStyle;
+
       const textColor = S.hlTextColor || "#ffffff";
       const outColor = S.hlOutlineColor || "#000000";
 
-      textSpan.style.background = "none";
-      textSpan.style.webkitBackgroundClip = "unset";
-      textSpan.style.webkitTextFillColor = "unset";
-      textSpan.style.color = isPlaceholder ? "rgba(255, 255, 255, 0.8)" : textColor;
+      textSpan.style.setProperty("--hl-text-color", textColor);
+      textSpan.style.setProperty("--hl-out-color", outColor);
 
+      textSpan.style.color = isPlaceholder ? "rgba(255, 255, 255, 0.8)" : textColor;
       textSpan.style.fontWeight = S.hlBold ? "900" : "400";
       textSpan.style.fontStyle = S.hlItalic ? "italic" : "normal";
       textSpan.style.textDecoration = S.hlUnderline ? "underline" : "none";
       textSpan.style.textTransform = S.hlUppercase ? "uppercase" : "none";
-
-      textSpan.style.textShadow = `0 0 2px ${outColor}, 0 2px 4px rgba(0,0,0,0.85)`;
-      textSpan.style.webkitTextStroke = isPlaceholder ? "none" : `0.5px ${outColor}`;
-      textSpan.style.fontFamily = "Impact, 'Arial Black', sans-serif";
-      textSpan.style.fontSize = "16px";
-      textSpan.style.letterSpacing = "0.5px";
-      textSpan.style.maxWidth = "90%";
-      textSpan.style.wordBreak = "break-word";
-      textSpan.style.lineHeight = "1.2";
-      textSpan.style.pointerEvents = "none";
 
       if (hlBox) {
         if (isPlaceholder) {
@@ -1640,127 +1651,12 @@ function initCanvasDirectControls() {
     if (!overlay) return;
 
     const box = overlay.querySelector(".canvas-item-box");
-    const resizeHandle = overlay.querySelector(".canvas-resize-handle");
-    const btnDown = overlay.querySelector(".ci-scale-down");
-    const btnUp = overlay.querySelector(".ci-scale-up");
-    const scaleLbl = overlay.querySelector(".ci-scale-label");
-
-    // 1. Botões dedicados de Escala (+ / -) e Reset (100%)
-    if (btnDown) {
-      btnDown.onpointerdown = e => e.stopPropagation();
-      btnDown.onclick = e => {
-        e.stopPropagation();
-        e.preventDefault();
-        const curScale = type === "headline" ? (S.hlScale || 1.0) : (S.subScale || 1.0);
-        const newScale = Math.max(0.5, Math.min(2.5, Math.round((curScale - 0.1) * 10) / 10));
-        if (type === "headline") {
-          S.hlScale = newScale;
-          updateHeadlineOverlay();
-        } else {
-          S.subScale = newScale;
-          const v = (S.viewMode === "rendered") ? $("#pvRenderedFull") : pv;
-          updateSubtitleOverlayAtTime(v ? v.currentTime : 0);
-        }
-      };
-    }
-
-    if (btnUp) {
-      btnUp.onpointerdown = e => e.stopPropagation();
-      btnUp.onclick = e => {
-        e.stopPropagation();
-        e.preventDefault();
-        const curScale = type === "headline" ? (S.hlScale || 1.0) : (S.subScale || 1.0);
-        const newScale = Math.max(0.5, Math.min(2.5, Math.round((curScale + 0.1) * 10) / 10));
-        if (type === "headline") {
-          S.hlScale = newScale;
-          updateHeadlineOverlay();
-        } else {
-          S.subScale = newScale;
-          const v = (S.viewMode === "rendered") ? $("#pvRenderedFull") : pv;
-          updateSubtitleOverlayAtTime(v ? v.currentTime : 0);
-        }
-      };
-    }
-
-    if (scaleLbl) {
-      scaleLbl.onpointerdown = e => e.stopPropagation();
-      scaleLbl.onclick = e => {
-        e.stopPropagation();
-        e.preventDefault();
-        if (type === "headline") {
-          S.hlScale = 1.0;
-          updateHeadlineOverlay();
-        } else {
-          S.subScale = 1.0;
-          const v = (S.viewMode === "rendered") ? $("#pvRenderedFull") : pv;
-          updateSubtitleOverlayAtTime(v ? v.currentTime : 0);
-        }
-      };
-    }
-
-    // 2. Alça de Redimensionamento Dedicada (Corner Handle)
-    // EXCLUSIVAMENTE para alterar escala (NUNCA altera posição X e Y)
-    if (resizeHandle) {
-      const onResizePointerDown = (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const initialScale = (type === "headline" ? (S.hlScale || 1.0) : (S.subScale || 1.0));
-
-        const rect = overlay.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        const startDist = Math.hypot(startX - centerX, startY - centerY) || 1;
-
-        overlay.classList.add("is-resizing");
-        try { resizeHandle.setPointerCapture(e.pointerId); } catch (_) {}
-
-        const onResizePointerMove = (ev) => {
-          ev.stopPropagation();
-          ev.preventDefault();
-          const curDist = Math.hypot(ev.clientX - centerX, ev.clientY - centerY);
-          const ratio = curDist / startDist;
-          const newScale = Math.max(0.5, Math.min(2.5, Math.round(initialScale * ratio * 20) / 20));
-
-          if (type === "headline") {
-            S.hlScale = newScale;
-            overlay.style.transform = `translate(-50%, -50%) scale(${newScale})`;
-            const lbl = $("#hlScaleLabel");
-            if (lbl) lbl.textContent = `${Math.round(newScale * 100)}%`;
-          } else {
-            S.subScale = newScale;
-            overlay.style.transform = `translate(-50%, -50%) scale(${newScale})`;
-            const lbl = $("#subScaleLabel");
-            if (lbl) lbl.textContent = `${Math.round(newScale * 100)}%`;
-          }
-        };
-
-        const onResizePointerUp = (ev) => {
-          overlay.classList.remove("is-resizing");
-          try { resizeHandle.releasePointerCapture(ev.pointerId); } catch (_) {}
-          window.removeEventListener("pointermove", onResizePointerMove);
-          window.removeEventListener("pointerup", onResizePointerUp);
-          window.removeEventListener("pointercancel", onResizePointerUp);
-        };
-
-        window.addEventListener("pointermove", onResizePointerMove);
-        window.addEventListener("pointerup", onResizePointerUp);
-        window.addEventListener("pointercancel", onResizePointerUp);
-      };
-
-      resizeHandle.onpointerdown = onResizePointerDown;
-    }
-
-    // 3. Arrastar Livremente Posição X e Y (Corpo da Legenda / Headline)
-    // EXCLUSIVAMENTE altera posição X e Y (NUNCA altera tamanho ou escala!)
     const dragTarget = box || overlay;
+
+    // Arrastar Livremente Posição X e Y (Corpo da Legenda / Headline)
+    // EXCLUSIVAMENTE altera posição X e Y (NUNCA altera tamanho ou escala!)
     const onDragPointerDown = (e) => {
-      // Se clicou nos controles (+/-) ou na alça de redimensionamento, não inicia drag de posição
-      if (e.target.closest(".canvas-item-controls") || e.target.closest(".canvas-resize-handle") || e.target.closest(".ci-btn")) {
-        return;
-      }
+      if (e.target.closest("button") || e.target.closest("input")) return;
       e.stopPropagation();
       e.preventDefault();
 
@@ -1790,10 +1686,10 @@ function initCanvasDirectControls() {
 
         overlay.style.left = newX + "%";
         overlay.style.top = newY + "%";
+        // CRÍTICO: SOMENTE POSIÇÃO É ATUALIZADA. ESCALA NUNCA É ALTERADA!
         const curScale = (type === "headline" ? (S.hlScale || 1.0) : (S.subScale || 1.0));
         overlay.style.transform = `translate(-50%, -50%) scale(${curScale})`;
 
-        // CRÍTICO: SOMENTE POSIÇÃO É ATUALIZADA. ESCALA NUNCA É ALTERADA!
         if (type === "headline") {
           S.hlPosX = newX;
           S.hlPosY = newY;
@@ -2009,6 +1905,43 @@ if (visualSubScaleVal) {
   visualSubScaleVal.onclick = () => setSubtitleScale(100);
 }
 
+// CONTROLE DEDICADO DE TAMANHO DA HEADLINE (ÁREA VISUAL 2)
+function setHeadlineScale(val) {
+  const num = parseFloat(val) || 100;
+  const scale = num > 5 ? (num / 100) : num;
+  const clamped = Math.max(0.5, Math.min(2.5, Math.round(scale * 20) / 20));
+  S.hlScale = clamped;
+  const pct = Math.round(clamped * 100);
+
+  const range = $("#visualHlScaleRange");
+  if (range && +range.value !== pct) range.value = pct;
+  const lbl = $("#visualHlScaleVal");
+  if (lbl) lbl.textContent = `${pct}%`;
+
+  const hlOverlay = $("#hlPreviewOverlay");
+  if (hlOverlay) {
+    hlOverlay.style.transform = `translate(-50%, -50%) scale(${clamped})`;
+  }
+  updateHeadlineOverlay();
+}
+
+const visualHlScaleRange = $("#visualHlScaleRange");
+if (visualHlScaleRange) {
+  visualHlScaleRange.oninput = e => setHeadlineScale(+e.target.value);
+}
+const btnVisualHlScaleDown = $("#btnVisualHlScaleDown");
+if (btnVisualHlScaleDown) {
+  btnVisualHlScaleDown.onclick = () => setHeadlineScale(Math.round(((S.hlScale || 1.0) - 0.05) * 100));
+}
+const btnVisualHlScaleUp = $("#btnVisualHlScaleUp");
+if (btnVisualHlScaleUp) {
+  btnVisualHlScaleUp.onclick = () => setHeadlineScale(Math.round(((S.hlScale || 1.0) + 0.05) * 100));
+}
+const visualHlScaleVal = $("#visualHlScaleVal");
+if (visualHlScaleVal) {
+  visualHlScaleVal.onclick = () => setHeadlineScale(100);
+}
+
 function syncHeadlineText(val) {
   if (S.viewMode === "rendered") setVideoViewMode("original");
   if ($("#hlText") && $("#hlText").value !== val) $("#hlText").value = val;
@@ -2053,8 +1986,22 @@ const visualHlStyleSelect = $("#visualHlStyleSelect");
 if (visualHlStyleSelect) {
   visualHlStyleSelect.onchange = function() {
     S.hl = this.value;
+    if (this.value === "neon_cyber") {
+      S.hlTextColor = "#00d2b4";
+      S.hlOutlineColor = "#000000";
+    } else if (this.value === "laranja_texto") {
+      S.hlTextColor = "#ff6a00";
+      S.hlOutlineColor = "#000000";
+    } else if (this.value === "caixa_laranja") {
+      S.hlTextColor = "#ffffff";
+      S.hlOutlineColor = "#ff6a00";
+    }
+    const colorEl = $("#visualHlTextColor"), outEl = $("#visualHlOutlineColor");
+    if (colorEl && S.hlTextColor) colorEl.value = S.hlTextColor;
+    if (outEl && S.hlOutlineColor) outEl.value = S.hlOutlineColor;
     drawOptions();
     drawTL();
+    updateHeadlineOverlay();
   };
 }
 

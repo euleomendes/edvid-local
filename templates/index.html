@@ -327,8 +327,24 @@
                 </button>
                 <span id="visualHlTemplateIndicator" style="display:none;font-size:10.5px;color:#60a5fa;font-weight:700;">✓ Modelo ativo</span>
               </div>
-              <small style="color:#9ca3af;font-size:10.5px;display:block;margin-top:6px;">Arraste e redimensione o modelo diretamente no vídeo à direita.</small>
+              <small style="color:#9ca3af;font-size:10.5px;display:block;margin-top:6px;">Arraste o modelo no vídeo para posicionar e use o controle abaixo para a escala.</small>
             </div>
+
+            <!-- NOVO CONTROLE DEDICADO DE TAMANHO DA HEADLINE (VISUAL 2) -->
+            <div style="background:#0d1016;border:1px solid #1f2533;border-radius:8px;padding:8px 10px;margin-top:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="font-size:11px;font-weight:700;color:#cbd5e1;display:flex;align-items:center;gap:4px;">
+                  <span>📐</span> Tamanho da Headline
+                </span>
+                <span id="visualHlScaleVal" style="font-size:11px;font-weight:800;color:#eab308;background:rgba(234,179,8,0.14);border:1px solid rgba(234,179,8,0.3);padding:1px 8px;border-radius:10px;cursor:pointer;" title="Clique para redefinir para 100%">100%</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <button type="button" class="btn btn-secondary" id="btnVisualHlScaleDown" style="padding:2px 10px;font-size:13px;font-weight:800;border-radius:6px;line-height:1;min-width:30px;" title="Diminuir tamanho">-</button>
+                <input type="range" id="visualHlScaleRange" min="50" max="250" step="5" value="100" style="flex:1;accent-color:#eab308;cursor:pointer;height:6px;">
+                <button type="button" class="btn btn-secondary" id="btnVisualHlScaleUp" style="padding:2px 10px;font-size:13px;font-weight:800;border-radius:6px;line-height:1;min-width:30px;" title="Aumentar tamanho">+</button>
+              </div>
+            </div>
+            <small style="color:#8a90a0;font-size:10.5px;line-height:1.3;margin:4px 0 0 0;display:block;">Ajuste o tamanho com precisão no controle acima. Arraste no vídeo apenas para posicionar (X e Y).</small>
           </div>
 
           <!-- Coluna 2: Legenda rápida com toggle e controle dedicado de tamanho (Visual 2) -->
@@ -435,18 +451,12 @@
           <span id="framingOverlayText">↕ ↔ Ajustando Enquadramento</span>
         </div>
 
-        <!-- OVERLAY DA HEADLINE (TEXTO, FORMATAÇÃO E MODELO GRÁFICO - MANIPULAÇÃO DIRETA NO CANVAS) -->
+        <!-- OVERLAY DA HEADLINE (EXCLUSIVAMENTE PARA REPOSICIONAMENTO ESPACIAL X E Y) -->
         <div id="hlPreviewOverlay" class="canvas-item-overlay hl-preview-overlay" style="display:none;" tabindex="0">
           <div class="canvas-item-box" id="hlBox">
             <img id="hlTemplateOverlayImg" class="hl-template-overlay-img" style="display:none;" alt="">
             <span id="hlPreviewText" class="hl-preview-text"></span>
           </div>
-          <div class="canvas-item-controls" id="hlItemControls">
-            <button type="button" class="ci-btn ci-scale-down" id="btnHlScaleDown" title="Diminuir tamanho">-</button>
-            <span class="ci-scale-label" id="hlScaleLabel" title="Clique para redefinir para 100%">100%</span>
-            <button type="button" class="ci-btn ci-scale-up" id="btnHlScaleUp" title="Aumentar tamanho">+</button>
-          </div>
-          <div class="canvas-resize-handle" id="hlResizeHandle" title="Arraste para redimensionar a Headline">↘</div>
         </div>
 
         <!-- OVERLAY DE LEGENDA (EXCLUSIVAMENTE PARA REPOSICIONAMENTO ESPACIAL X E Y) -->

@@ -345,7 +345,7 @@ def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False
             h_start = map_time_after_cuts(h_start, effective_silences)
             h_end = map_time_after_cuts(h_end, effective_silences)
         if h_end > h_start:
-            lines.append(f"Dialogue: 1,{fmt_time(h_start)},{fmt_time(h_end)},Headline,,0,0,0,,{{\\an5\\pos({hl_x},{hl_y})\\fs{hl_fs}}}{tx_hl(headline)}\n")
+            lines.append(f"Dialogue: 1,{fmt_time(h_start)},{fmt_time(h_end)},Headline,,0,0,0,,{{\\an5\\pos({hl_x},{hl_y})\\fs{hl_fs}\\q2}}{tx_hl(headline)}\n")
 
     # Coleta todas as palavras de todos os segmentos se legendas estiverem ativadas
     all_words = []
@@ -378,10 +378,10 @@ def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False
         if karaoke:
             # Karaokê dinâmico palavra por palavra com tamanho e posição do canvas
             k_words = "".join(f"{{\\k{max(1, int(round((w['end'] - w['start']) * 100)))}}}{tx_sub(w['word'], c)} " for w in chunk)
-            line_text = f"{{\\an5\\pos({sub_x},{sub_y})\\fs{sub_fs}}}{k_words.strip()}"
+            line_text = f"{{\\an5\\pos({sub_x},{sub_y})\\fs{sub_fs}\\q2}}{k_words.strip()}"
         else:
             raw_words = " ".join(tx_sub(w["word"], c) for w in chunk)
-            line_text = f"{{\\an5\\pos({sub_x},{sub_y})\\fs{sub_fs}}}{raw_words.strip()}"
+            line_text = f"{{\\an5\\pos({sub_x},{sub_y})\\fs{sub_fs}\\q2}}{raw_words.strip()}"
         lines.append(f"Dialogue: 0,{fmt_time(c_start)},{fmt_time(c_end)},Default,,0,0,0,,{line_text}\n")
 
     out_path.write_text("".join(lines), encoding="utf-8")
@@ -872,7 +872,7 @@ def export():
             tpl_path = find_upload(headline_template_id)
             if tpl_path:
                 tpl_out = job_tmp / "tpl_applied.mp4"
-                tpl_w = int(round(1080 * hl_scale))
+                tpl_w = int(round(1080 * 0.90 * hl_scale))
                 target_x = int(round(hl_pos_x * 1080))
                 target_y = int(round(hl_pos_y * 1920))
                 h_start = float(headline_start or 0.0)
@@ -882,7 +882,7 @@ def export():
                     h_end = map_time_after_cuts(h_end, effective_silences)
                 fc_tpl = (
                     f"[1:v]scale={tpl_w}:-1[tpl];"
-                    f"[0:v][tpl]overlay=x='min(1080-w,max(0,{target_x}-w/2))':y='min(1920-h,max(0,{target_y}-h/2))':enable='between(t,{h_start:.2f},{h_end:.2f})'[v]"
+                    f"[0:v][tpl]overlay=x='({target_x}-w/2)':y='({target_y}-h/2)':enable='between(t,{h_start:.2f},{h_end:.2f})'[v]"
                 )
                 cmd = ["ffmpeg", "-y", "-i", str(current), "-i", str(tpl_path), "-filter_complex", fc_tpl,
                        "-map", "[v]", "-map", "0:a",
