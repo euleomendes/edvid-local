@@ -1,0 +1,5 @@
+flask
+faster-whisper
+opencv-python-headless
+numpy
+static-ffmpeg

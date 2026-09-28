@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Edvid — Preview</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="logo">
+    <span class="logo-text">EDVID</span>
+  </div>
+  <div class="proj-meta">
+    <b id="projTitle">Novo projeto</b>
+    <small id="projSub">Envie um vídeo na aba Corte para começar</small>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="corte"><span class="tab-badge">FASE 1</span> Corte</button>
+  <button data-tab="estilo">Estilo</button>
+  <button data-tab="visual"><span class="tab-badge">FASE 2</span> Visual</button>
+</nav>
+
+<!-- FASE 1: CORTE E PREVIEW INTERATIVO -->
+<section id="tab-corte" class="pane">
+  <div class="cards-row">
+    <div class="card">
+      <h4>Vídeo principal</h4>
+      <input type="file" id="videoInput" accept="video/*">
+      <small id="upStatus"></small>
+    </div>
+    <div class="card">
+      <h4>Transcrição automática (faster-whisper)</h4>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+        <button class="btn btn-primary" id="trBtn">Transcrever</button>
+        <small id="trStatus">Envie o vídeo primeiro</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tela de preview interativa sincronizada -->
+  <div id="previewContainer" class="preview-layout" style="display:none">
+    <div class="player-pane">
+      <div class="pane-header">
+        <h4>Preview do Vídeo</h4>
+        <span id="playerBadge" class="badge">Original</span>
+      </div>
+      <div class="video-wrapper">
+        <video id="previewPlayer" playsinline controls preload="metadata"></video>
+      </div>
+      <div class="player-subbar">
+        <span id="playerTime">0:00.00 / 0:00.00</span>
+        <div class="player-quick-actions">
+          <button class="ib" id="btnRewind" title="Voltar 3s">↺ -3s</button>
+          <button class="ib" id="btnForward" title="Avançar 3s">+3s ↻</button>
+          <select id="playbackRate" class="ib">
+            <option value="0.75">0.75x</option>
+            <option value="1" selected>1.0x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2.0x</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="transcript-pane">
+      <div class="pane-header">
+        <h4>Textos Transcritos</h4>
+        <span id="segCountBadge" class="badge">0 trechos</span>
+      </div>
+      <p class="transcript-hint">💡 <b>Clique em qualquer trecho ou tempo</b> para pular o vídeo até o timestamp exato. Você também pode editar o texto.</p>
+      <div id="transcriptList" class="transcript-list">
+        <div class="transcript-empty">Nenhum trecho transcrito ainda. Clique no botão "Transcrever" acima para iniciar.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="segs" style="display:none"></div>
+</section>
+
+<!-- FASE 2: ESTILO (IDÊNTICO ÀS IMAGENS DE REFERÊNCIA) -->
+<section id="tab-estilo" class="pane">
+  <div class="estilo-container">
+    <h3 class="estilo-title">Como vamos montar a Fase 2?</h3>
+
+    <div class="sec-group">
+      <h4 class="sec-label">TIPO DE EDIÇÃO</h4>
+      <div class="opts-grid tipos-grid" id="tipoC"></div>
+      <div id="split2" class="card split-card" style="display:none">
+        <small>Segundo vídeo ou imagem fixa (para o modo de tela dividida):</small>
+        <input type="file" id="video2Input" accept="video/*,image/*"><small id="up2Status"></small>
+      </div>
+
+      <div class="card" style="margin-top:12px;background:#0d1016;border:1px solid #1f2533;border-radius:10px;padding:12px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <b style="font-size:12px;color:#e5e7eb;">↕ Enquadramento Vertical da Câmera (ajustar altura da cabeça / corte):</b>
+          <span id="framingYVal" style="font-size:12px;font-weight:700;color:#ff6a00;">10% (Ideal)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button type="button" class="btn btn-secondary framing-step-btn" id="btnNudgeUpEstilo" title="Subir câmera (-5%)" style="padding:3px 8px;font-size:11px;">▲ Subir</button>
+          <input type="range" id="framingY" min="0" max="60" value="10" step="2" style="flex:1;">
+          <button type="button" class="btn btn-secondary framing-step-btn" id="btnNudgeDownEstilo" title="Descer câmera (+5%)" style="padding:3px 8px;font-size:11px;">Descer ▼</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap;">
+          <small style="color:#9ca3af;font-size:11px;">Predefinições:</small>
+          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="0" style="padding:2px 8px;font-size:10px;">0% (Topo / Max Cabeça)</button>
+          <button type="button" class="btn btn-primary on btn-framing-preset" data-val="10" style="padding:2px 8px;font-size:10px;">10% (Ideal)</button>
+          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="20" style="padding:2px 8px;font-size:10px;">20% (Padrão)</button>
+          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="35" style="padding:2px 8px;font-size:10px;">35% (Centro)</button>
+        </div>
+        <small style="color:#6b7280;display:block;margin-top:6px;">Arraste para mover o vídeo para cima ou para baixo e garantir que a cabeça nunca seja cortada. Você também pode ajustar após a edição final na aba Visual!</small>
+      </div>
+    </div>
+
+    <div class="sec-group">
+      <h4 class="sec-label">ESTILO DE HEADLINE</h4>
+      <div class="opts-grid headlines-grid" id="hlC"></div>
+      <input type="text" id="hlText" class="hl-input" placeholder="Texto da headline (ex: ASSISTA ATÉ O FINAL)">
+      
+      <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;align-items:center;">
+        <div>
+          <small style="color:#9ca3af;font-weight:600;display:block;margin-bottom:4px;">Duração na tela:</small>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="btn btn-secondary hl-dur-btn" data-dur="5" style="padding:4px 10px;font-size:11px;">5 segundos</button>
+            <button type="button" class="btn btn-secondary hl-dur-btn" data-dur="10" style="padding:4px 10px;font-size:11px;">10 segundos</button>
+            <button type="button" class="btn btn-primary hl-dur-btn on" data-dur="all" style="padding:4px 10px;font-size:11px;">Vídeo Todo</button>
+          </div>
+        </div>
+        <div>
+          <small style="color:#9ca3af;font-weight:600;display:block;margin-bottom:4px;">Posição do texto:</small>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="btn btn-primary hl-pos-btn on" data-pos="topo" style="padding:4px 10px;font-size:11px;">Topo</button>
+            <button type="button" class="btn btn-secondary hl-pos-btn" data-pos="centro" style="padding:4px 10px;font-size:11px;">Centro</button>
+            <button type="button" class="btn btn-secondary hl-pos-btn" data-pos="base" style="padding:4px 10px;font-size:11px;">Base</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:16px;">
+          <label style="font-size:11px;color:#9ca3af;">De: <input type="number" id="hlStart" value="0" min="0" step="0.5" style="width:55px;padding:4px;background:#12161f;border:1px solid #1f2533;color:#fff;border-radius:4px;">s</label>
+          <label style="font-size:11px;color:#9ca3af;">Até: <input type="number" id="hlEnd" value="0" min="0" step="0.5" style="width:55px;padding:4px;background:#12161f;border:1px solid #1f2533;color:#fff;border-radius:4px;">s</label>
+        </div>
+      </div>
+      <small style="color:#6b7280;margin-top:6px;display:block;">💡 Você também pode <b>clicar e arrastar</b> a barra amarela da Headline (T) diretamente na Timeline na aba Visual!</small>
+    </div>
+
+    <div class="sec-group">
+      <h4 class="sec-label">ESTILO DE LEGENDA</h4>
+      <div class="opts-grid captions-grid" id="capC"></div>
+    </div>
+
+    <div class="sec-group">
+      <h4 class="sec-label">ELEMENTOS DA EDIÇÃO</h4>
+      <div class="pills-grid" id="elC"></div>
+      <div id="musicBox" class="card music-card" style="display:none">
+        <small>Trilha sonora</small>
+        <input type="file" id="musicInput" accept="audio/*">
+        <label class="vol-label">Volume: <input type="range" id="musicVol" min="0" max="0.5" step="0.05" value="0.15"></label>
+      </div>
+    </div>
+
+    <div class="foot">
+      <small id="sum"></small>
+      <button class="btn btn-primary" id="renderBtn">Salvar e renderizar a Fase 2</button>
+    </div>
+    <small id="rStatus"></small>
+  </div>
+</section>
+
+<!-- FASE 2: VISUAL E TIMELINE PROFISSIONAL (IDÊNTICA À IMAGEM 4) -->
+<section id="tab-visual" class="pane">
+  <div class="vis-layout">
+    <div class="edit-timeline-panel">
+      <div class="timeline-toolbar">
+        <button class="tb-btn play-btn" id="playBtn" title="Play / Pause">▶</button>
+        <button class="tb-btn step-btn" id="stepBackBtn" title="Voltar ao início">⏮</button>
+        <span id="clock" class="time-clock">0:00.00 / 0:00.00</span>
+        <button class="tb-btn marker-btn" id="markerBtn" title="Marcador de corte"><span class="red-flag">⚑</span> IN</button>
+        <span class="sp"></span>
+        <label class="zoom-wrap">zoom <input type="range" id="zoom" min="5" max="80" value="20"></label>
+        <button class="tb-btn fit-btn" id="fit">fit</button>
+      </div>
+
+      <div class="tlwrap">
+        <div class="lbls">
+          <i title="Marcadores de corte" class="lbl-flag">⚑</i>
+          <i title="Legendas" class="lbl-subs">💬</i>
+          <i title="Cenas e cortes" class="lbl-scenes">🎬</i>
+          <i title="Forma de onda sonora" class="lbl-wave">🔊</i>
+          <i title="Headline" class="lbl-hl">T</i>
+          <i title="Mídias e B-roll" class="lbl-media">🖼</i>
+          <i title="Trilha sonora" class="lbl-music">♫</i>
+        </div>
+        <div class="scroll" id="scroll">
+          <div id="tl"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="prev-video-panel">
+      <div class="phone-frame" id="phoneFrame">
+        <div class="phone-speaker-notch"></div>
+        <small id="pvLabel" class="preview-tag">Preview Final</small>
+        <div id="framingOverlay" class="framing-drag-overlay" style="display:none">
+          <span id="framingOverlayText">↕ Enquadramento: 10%</span>
+        </div>
+        <video id="pv" controls playsinline></video>
+      </div>
+
+      <!-- PAINEL DE CONTROLE DE ENQUADRAMENTO VERTICAL NA ABA VISUAL -->
+      <div class="card framing-ctrl-card" id="visualFramingCard">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <b style="font-size:12px;color:#e5e7eb;display:flex;align-items:center;gap:6px;">
+            <span>↕</span> Enquadramento da Câmera:
+          </b>
+          <span id="visualFramingYVal" class="framing-val-pill">10% (Ideal)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <button type="button" class="btn btn-secondary framing-step-btn" id="btnNudgeUp" title="Subir vídeo / mostrar mais cabeça (-5%)" style="padding:4px 8px;font-size:11px;">▲ Subir</button>
+          <input type="range" id="visualFramingY" min="0" max="60" value="10" step="2" style="flex:1;">
+          <button type="button" class="btn btn-secondary framing-step-btn" id="btnNudgeDown" title="Descer vídeo (+5%)" style="padding:4px 8px;font-size:11px;">Descer ▼</button>
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;">
+          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="0" style="padding:2px 6px;font-size:10px;">0% (Topo/Cabeça)</button>
+          <button type="button" class="btn btn-primary on btn-framing-preset" data-val="10" style="padding:2px 6px;font-size:10px;">10% (Ideal)</button>
+          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="20" style="padding:2px 6px;font-size:10px;">20% (Padrão)</button>
+          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="35" style="padding:2px 6px;font-size:10px;">35% (Centro)</button>
+        </div>
+        <small style="color:#6b7280;display:block;margin-bottom:8px;font-size:10.5px;">💡 Dica: Arraste o vídeo diretamente ou use os botões acima para ajustar a altura da cabeça.</small>
+        <button type="button" class="btn btn-primary" id="btnReapplyFraming" style="width:100%;font-size:12px;padding:8px 12px;">
+          ⚡ Reaplicar Enquadramento no Vídeo Final
+        </button>
+        <small id="visualFramingStatus" style="display:block;text-align:center;margin-top:6px;font-size:11px;color:#9ca3af;"></small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Modal de notificação de vídeo pronto -->
+<div id="modalReady" class="modal-backdrop" style="display:none">
+  <div class="modal-card">
+    <div class="modal-icon">🎉</div>
+    <h3>Seu vídeo está pronto!</h3>
+    <p>A edição da Fase 2 foi renderizada com sucesso com todas as legendas, efeitos e cortes aplicados.</p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="modalViewBtn">▶ Assistir Preview</button>
+      <a class="btn btn-success" id="modalDownloadBtn" download="video_editado.mp4" href="#">⬇️ Baixar Vídeo (.mp4)</a>
+      <button class="btn btn-secondary" id="modalCloseBtn">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/script.js"></script>
+</body>
+</html>
