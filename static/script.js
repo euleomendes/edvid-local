@@ -378,8 +378,11 @@ if (transcriptListEl) {
       if (!isNaN(idx) && S.segs[idx]) {
         S.segs[idx].text = e.target.value;
         S.segs[idx].words = [];
+        S._subChunksValid = false;
         const inp = $(`#segs input[data-i="${idx}"]`);
         if (inp) inp.value = e.target.value;
+        const curV = $("#pv");
+        if (curV) updateSubtitleOverlayAtTime(curV.currentTime || 0);
       }
     }
   });
@@ -763,8 +766,11 @@ $("#trBtn").onclick = async () => {
   const r = await post("/transcribe", { video_id: S.vid });
   if (r.error) { $("#trStatus").textContent = "Erro: " + r.error; return; }
   S.segs = r.segments;
+  S._subChunksValid = false;
   $("#trStatus").textContent = `${S.segs.length} trechos transcritos ✓`;
   renderTranscriptList();
+  const pvCam = $("#pv");
+  updateSubtitleOverlayAtTime(pvCam ? pvCam.currentTime : 0);
 };
 
 // ========================================================
@@ -778,14 +784,21 @@ async function executeRender(isQuickUpdate = false) {
 
   const btnEstilo = $("#renderBtn");
   const btnVisual = $("#btnReRenderVisual");
+  const btnPrompt = $("#btnPromptRender");
   const statEstilo = $("#rStatus");
   const statVisual = $("#visualReRenderStatus");
+  const pvrStatus = $("#pvrPromptStatus");
 
   if (btnEstilo) btnEstilo.disabled = true;
   if (btnVisual) {
     btnVisual.disabled = true;
     btnVisual.textContent = "Renderizando alterações... ⏳";
   }
+  if (btnPrompt) {
+    btnPrompt.disabled = true;
+    btnPrompt.textContent = "⏳ Renderizando vídeo (1:1)...";
+  }
+  if (pvrStatus) pvrStatus.textContent = "Renderizando vídeo com alta fidelidade (1:1)...";
   if (statEstilo) statEstilo.textContent = "Renderizando vídeo... (aplicando legendas, headline e mídias)";
   if (statVisual) statVisual.textContent = "Processando nova versão do vídeo... ⏳";
 
@@ -843,12 +856,19 @@ async function executeRender(isQuickUpdate = false) {
     if (r.error) {
       if (statEstilo) statEstilo.textContent = "Erro: " + r.error;
       if (statVisual) statVisual.textContent = "Erro: " + r.error;
+      if (pvrStatus) pvrStatus.textContent = "Erro: " + r.error;
       console.error(r.detail);
       return;
     }
 
     const outUrl = "/output/" + r.output + "?t=" + Date.now();
     S.renderedUrl = outUrl;
+
+    const dpsBadge = $("#dpsRenderBadge");
+    if (dpsBadge) {
+      dpsBadge.textContent = "✓ Pronto";
+      dpsBadge.classList.add("ready");
+    }
 
     // Ativa exibição do vídeo renderizado no player dedicado full frame (100%)
     setVideoViewMode("rendered");
@@ -864,18 +884,24 @@ async function executeRender(isQuickUpdate = false) {
       statVisual.textContent = "✓ Edição atualizada com sucesso!";
       setTimeout(() => { if (statVisual) statVisual.textContent = ""; }, 4000);
     }
+    if (pvrStatus) pvrStatus.textContent = "";
 
     notifyVideoReady(outUrl);
   } catch (err) {
     const msg = err.message || err;
     if (statEstilo) statEstilo.textContent = "Erro: " + msg;
     if (statVisual) statVisual.textContent = "Erro: " + msg;
+    if (pvrStatus) pvrStatus.textContent = "Erro: " + msg;
     console.error("Falha ao exportar:", err);
   } finally {
     if (btnEstilo) btnEstilo.disabled = false;
     if (btnVisual) {
       btnVisual.disabled = false;
       btnVisual.textContent = "⚡ Atualizar e Re-renderizar Vídeo";
+    }
+    if (btnPrompt) {
+      btnPrompt.disabled = false;
+      btnPrompt.textContent = "⚡ Gerar Visualização Final Agora";
     }
   }
 }
@@ -887,46 +913,82 @@ if (btnReRenderVisual) {
   btnReRenderVisual.onclick = () => executeRender(true);
 }
 
-// ALTERNA ENTRE VISUALIZAÇÃO DO VÍDEO RENDERIZADO (100% FULL FRAME) E MODO EDIÇÃO
-// CORREÇÃO CRÍTICA: O slot do apresentador (#pv) toca estritamente o vídeo principal limpo,
-// nunca misturando com o vídeo composto renderizado nem sobrepondo mídias.
+// ========================================================
+// SISTEMA DE DUPLO PREVIEW (EDIÇÃO VS. RENDERIZAÇÃO FINAL 1:1)
+// Alterna instantaneamente entre o Canvas Ativo (60 FPS interativo)
+// e o Vídeo Renderizado Final em Alta Fidelidade (1:1 MP4)
+// ========================================================
 function setVideoViewMode(mode) {
   S.viewMode = mode;
-  const isRendered = (mode === "rendered" && S.renderedUrl);
   const pvCam = $("#pv");
   const pvFull = $("#pvRenderedFull");
   const splitView = $("#interactiveSplitView");
   const splitGuide = $("#splitGuideLine");
   const hlOverlay = $("#hlPreviewOverlay");
-  const togBtn = $("#btnToggleVideoView");
+  const subOverlay = $("#subPreviewOverlay");
   const pvLabel = $("#pvLabel");
   const medVideo = $("#pvMediaVideo");
+  const dpsEdit = $("#dpsBtnEdit");
+  const dpsRender = $("#dpsBtnRender");
+  const pvrPrompt = $("#pvRenderPrompt");
+  const togBtn = $("#btnToggleVideoView");
 
-  const subOverlay = $("#subPreviewOverlay");
-
-  if (isRendered) {
-    if (pvCam && !pvCam.paused) pvCam.pause();
-    if (medVideo && !medVideo.paused) medVideo.pause();
+  if (mode === "rendered") {
+    if (dpsRender) dpsRender.classList.add("on");
+    if (dpsEdit) dpsEdit.classList.remove("on");
 
     if (splitView) splitView.style.display = "none";
     if (splitGuide) splitGuide.style.display = "none";
     if (hlOverlay) hlOverlay.style.display = "none";
     if (subOverlay) subOverlay.style.display = "none";
 
-    if (pvFull) {
-      if (pvFull.src !== S.renderedUrl) {
-        pvFull.src = S.renderedUrl;
+    if (S.renderedUrl) {
+      if (pvrPrompt) pvrPrompt.style.display = "none";
+      let syncTime = 0;
+      if (pvCam) {
+        if (!pvCam.paused) pvCam.pause();
+        syncTime = pvCam.currentTime || 0;
       }
-      pvFull.style.display = "block";
+      if (medVideo && !medVideo.paused) medVideo.pause();
+
+      if (pvFull) {
+        if (pvFull.src !== S.renderedUrl) {
+          pvFull.src = S.renderedUrl;
+        }
+        if (Number.isFinite(syncTime)) {
+          pvFull.currentTime = syncTime;
+        }
+        pvFull.style.display = "block";
+      }
+      if (pvLabel) pvLabel.textContent = "Renderizado (1:1) ✓";
+    } else {
+      // Vídeo ainda não renderizado: exibe tela de prompt CTA para renderizar
+      if (pvFull) {
+        if (!pvFull.paused) pvFull.pause();
+        pvFull.style.display = "none";
+      }
+      if (pvrPrompt) pvrPrompt.style.display = "flex";
+      if (pvLabel) pvLabel.textContent = "Visualização Final (1:1)";
     }
+
     if (togBtn) {
       togBtn.textContent = "👁️ Renderizado";
       togBtn.classList.add("is-active");
     }
-    if (pvLabel) pvLabel.textContent = "Renderizado ✓";
   } else {
-    if (pvFull && !pvFull.paused) pvFull.pause();
-    if (pvFull) pvFull.style.display = "none";
+    // Modo Edição (Canvas Interativo)
+    if (dpsEdit) dpsEdit.classList.add("on");
+    if (dpsRender) dpsRender.classList.remove("on");
+    if (pvrPrompt) pvrPrompt.style.display = "none";
+
+    let syncTime = null;
+    if (pvFull) {
+      if (!pvFull.paused) pvFull.pause();
+      if (Number.isFinite(pvFull.currentTime) && pvFull.currentTime > 0) {
+        syncTime = pvFull.currentTime;
+      }
+      pvFull.style.display = "none";
+    }
 
     if (splitView) splitView.style.display = "flex";
     if (splitGuide) splitGuide.style.display = (S.tipo !== "unica") ? "block" : "none";
@@ -934,9 +996,10 @@ function setVideoViewMode(mode) {
     if (pvCam) {
       // Garante que o slot da câmera NUNCA toque o arquivo renderizado, tocando unicamente o vídeo original
       if (S.originalUrl && pvCam.src !== S.originalUrl) {
-        const cur = pvCam.currentTime || 0;
         pvCam.src = S.originalUrl;
-        pvCam.currentTime = cur;
+      }
+      if (syncTime !== null) {
+        pvCam.currentTime = syncTime;
       }
     }
 
@@ -953,16 +1016,27 @@ function setVideoViewMode(mode) {
   }
 }
 
+// BINDINGS DO DUPLO PREVIEW
+const dpsBtnEdit = $("#dpsBtnEdit");
+if (dpsBtnEdit) {
+  dpsBtnEdit.onclick = () => setVideoViewMode("original");
+}
+const dpsBtnRender = $("#dpsBtnRender");
+if (dpsBtnRender) {
+  dpsBtnRender.onclick = () => setVideoViewMode("rendered");
+}
+const btnPromptRender = $("#btnPromptRender");
+if (btnPromptRender) {
+  btnPromptRender.onclick = () => {
+    executeRender(true);
+  };
+}
 const btnToggleVideoView = $("#btnToggleVideoView");
 if (btnToggleVideoView) {
   btnToggleVideoView.onclick = () => {
     if (S.viewMode === "rendered") {
       setVideoViewMode("original");
     } else {
-      if (!S.renderedUrl) {
-        alert("Renderize o vídeo primeiro para visualizar a versão final.");
-        return;
-      }
       setVideoViewMode("rendered");
     }
   };
@@ -1565,8 +1639,77 @@ function updateHeadlineOverlay() {
 }
 
 // ========================================================
+// SISTEMA DE CHUNKING DE PALAVRAS VIRAL (1 A 3 PALAVRAS POR TELA)
+// Réplica idêntica de chunk_words() e build_ass_subtitles() do backend
+// Garante fidelidade visual 1:1 rigorosa entre modo Edição e Renderização
+// ========================================================
+function getSubtitleChunks() {
+  if (!S.segs || !S.segs.length) return [];
+  if (S._subChunks && S._subChunksValid) {
+    return S._subChunks;
+  }
+
+  const allWords = [];
+  for (const seg of S.segs) {
+    if (seg.words && seg.words.length > 0) {
+      for (const w of seg.words) {
+        const txt = (w.word || "").trim();
+        if (txt) {
+          allWords.push({
+            word: txt,
+            start: +(w.start || 0),
+            end: +(w.end || 0)
+          });
+        }
+      }
+    } else if (seg.text) {
+      const wList = seg.text.trim().split(/\s+/).filter(Boolean);
+      if (wList.length > 0) {
+        const s = +(seg.start || 0);
+        const e = +(seg.end || s + 1);
+        const step = (e - s) / wList.length;
+        wList.forEach((wStr, idx) => {
+          allWords.push({
+            word: wStr,
+            start: +(s + idx * step),
+            end: +(s + (idx + 1) * step)
+          });
+        });
+      }
+    }
+  }
+
+  // Chunker idêntico a chunk_words() no app.py (max_words=3, max_duration=1.25)
+  const chunks = [];
+  let cur = [];
+  for (const w of allWords) {
+    cur.push(w);
+    const dur = cur[cur.length - 1].end - cur[0].start;
+    if (cur.length >= 3 || dur >= 1.25) {
+      chunks.push({
+        words: cur,
+        start: cur[0].start,
+        end: cur[cur.length - 1].end
+      });
+      cur = [];
+    }
+  }
+  if (cur.length > 0) {
+    chunks.push({
+      words: cur,
+      start: cur[0].start,
+      end: cur[cur.length - 1].end
+    });
+  }
+
+  S._subChunks = chunks;
+  S._subChunksValid = true;
+  return chunks;
+}
+
+// ========================================================
 // PREVIEW AO VIVO DE LEGENDA (MANIPULAÇÃO DIRETA NO CANVAS)
-// Sincronização em tempo real com o vídeo e preview instantâneo
+// Sincronização em tempo real com o vídeo e fidelidade 1:1 rigorosa
 // ========================================================
 function updateSubtitleOverlayAtTime(curTime) {
   const overlay = $("#subPreviewOverlay");
@@ -1583,7 +1726,7 @@ function updateSubtitleOverlayAtTime(curTime) {
     overlay.style.left = (S.subPosX !== undefined ? S.subPosX : 50) + "%";
     overlay.style.top = (S.subPosY !== undefined ? S.subPosY : 77.0) + "%";
   }
-  // Escala sempre vinculada rigorosamente a S.subScale
+  // Escala sempre vinculada rigorosamente a S.subScale (NUNCA alterada ao arrastar)
   overlay.style.transform = `translate(-50%, -50%) scale(${S.subScale || 1.0})`;
 
   const curPct = Math.round((S.subScale || 1.0) * 100);
@@ -1600,40 +1743,59 @@ function updateSubtitleOverlayAtTime(curTime) {
   const contentEl = $("#subPreviewContent");
   if (!contentEl) return;
 
-  // Determina texto da legenda atual com preview dinâmico imediato
-  let text = "";
-  if (S.segs && S.segs.length > 0) {
-    const activeSeg = S.segs.find(s => curTime >= s.start && curTime <= s.end);
-    if (activeSeg) {
-      text = activeSeg.text.trim();
-    } else {
-      // Se pausado em ponto sem fala ou no início, exibe o trecho mais próximo para ajuste visual imediato
-      const closestSeg = S.segs.reduce((prev, curr) => {
-        return (Math.abs(curr.start - curTime) < Math.abs(prev.start - curTime) ? curr : prev);
-      }, S.segs[0]);
-      text = closestSeg ? closestSeg.text.trim() : "SUA LEGENDA AQUI";
-    }
-  } else {
-    // Placeholder vibrante para o usuário ver, arrastar e dimensionar antes de transcrever
-    text = "SUA LEGENDA AQUI";
-  }
-
   const capStyle = S.cap || "hormozi";
   contentEl.className = "sub-preview-content sub-style-" + capStyle;
 
-  if (capStyle === "hormozi") {
-    // Efeito viral Hormozi com primeira palavra em destaque
-    const words = text.split(/\s+/).filter(Boolean);
-    if (words.length <= 1) {
-      contentEl.innerHTML = `<b>${text.toUpperCase()}</b>`;
+  const chunks = getSubtitleChunks();
+
+  // Se não há legendas transcritas ainda, exibe placeholder limpo de 3 palavras
+  if (!chunks || chunks.length === 0) {
+    if (capStyle === "hormozi" || capStyle === "karaoke" || capStyle === "karaoke_neon") {
+      contentEl.innerHTML = `<b>SUA</b> LEGENDA AQUI`;
     } else {
-      const first = words[0].toUpperCase();
-      const rest = words.slice(1).join(" ").toUpperCase();
-      contentEl.innerHTML = `<b>${first}</b> ${rest}`;
+      contentEl.textContent = (capStyle === "destaque" || capStyle === "pop_destaque") ? "SUA LEGENDA AQUI" : "Sua Legenda Aqui";
     }
-  } else if (capStyle === "karaoke" || capStyle === "karaoke_neon") {
-    contentEl.textContent = text.toUpperCase();
+    return;
+  }
+
+  // Encontra o chunk ativo no timestamp curTime
+  let activeChunk = chunks.find(c => curTime >= c.start && curTime <= c.end);
+  let isExactTime = true;
+  if (!activeChunk) {
+    isExactTime = false;
+    // Se estiver em pausa ou entre respiros, usa o trecho mais próximo para manter a referência visual contínua
+    activeChunk = chunks.reduce((prev, curr) => {
+      return (Math.abs(curr.start - curTime) < Math.abs(prev.start - curTime) ? curr : prev);
+    }, chunks[0]);
+  }
+
+  if (!activeChunk || !activeChunk.words || !activeChunk.words.length) {
+    contentEl.textContent = "";
+    return;
+  }
+
+  const isUpper = (capStyle === "hormozi" || capStyle === "karaoke" || capStyle === "karaoke_neon" || capStyle === "destaque" || capStyle === "pop_destaque");
+
+  // Formatação com base no estilo
+  if (capStyle === "hormozi" || capStyle === "karaoke" || capStyle === "karaoke_neon") {
+    let activeIdx = -1;
+    if (isExactTime) {
+      activeIdx = activeChunk.words.findIndex(w => curTime >= w.start && curTime <= w.end);
+    }
+    // Se pausado ou antes do início, destaca a primeira palavra como referência WYSIWYG
+    if (activeIdx === -1) activeIdx = 0;
+
+    const htmlWords = activeChunk.words.map((w, idx) => {
+      const raw = isUpper ? w.word.toUpperCase() : w.word;
+      if (idx === activeIdx) {
+        return `<b>${raw}</b>`;
+      }
+      return raw;
+    });
+
+    contentEl.innerHTML = htmlWords.join(" ");
   } else {
+    const text = activeChunk.words.map(w => isUpper ? w.word.toUpperCase() : w.word).join(" ");
     contentEl.textContent = text;
   }
 }

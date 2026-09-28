@@ -405,13 +405,39 @@
     </div>
 
     <div class="prev-video-panel">
+      <!-- SISTEMA DE DUPLO PREVIEW (EDIÇÃO VS. RENDERIZAÇÃO FINAL) -->
+      <div class="dual-preview-bar">
+        <div class="dual-preview-switch">
+          <button type="button" class="dps-btn on" id="dpsBtnEdit" title="Modo interativo com canvas ativo para arrastar e posicionar elementos em tempo real">
+            <span class="dps-icon">🛠️</span>
+            <span class="dps-text">Edição (Canvas)</span>
+          </button>
+          <button type="button" class="dps-btn" id="dpsBtnRender" title="Visualização final em alta fidelidade (1:1) processada pelo motor de renderização">
+            <span class="dps-icon">👁️</span>
+            <span class="dps-text">Visualização Final</span>
+            <span class="dps-badge" id="dpsRenderBadge">1:1</span>
+          </button>
+        </div>
+      </div>
+
       <div class="phone-frame" id="phoneFrame">
         <div class="phone-speaker-notch"></div>
         <small id="pvLabel" class="preview-tag">Modo Edição</small>
         
         <div class="preview-top-actions">
           <button type="button" id="btnToggleSafeZone" class="preview-top-btn" title="Gabarito da Zona Segura Reels/TikTok (420px)">🛡️ Zona Segura</button>
-          <button type="button" id="btnToggleVideoView" class="preview-top-btn preview-mode-toggle" title="Alternar entre modo de edição e vídeo renderizado">👁️ Renderizado</button>
+          <button type="button" id="btnToggleVideoView" class="preview-top-btn preview-mode-toggle" style="display:none;" title="Alternar visualização"></button>
+        </div>
+
+        <!-- TELA DE CHAMADA PARA RENDERIZAR QUANDO EM MODO RENDERIZADO SEM VÍDEO PRONTO -->
+        <div id="pvRenderPrompt" class="pv-render-prompt" style="display:none;">
+          <div class="pvr-icon">👁️</div>
+          <h4>Visualização Final (1:1)</h4>
+          <p>Veja o vídeo processado exatamente como sairá no arquivo final exportado, com legendas sincronizadas, recortes e enquadramentos.</p>
+          <button type="button" class="btn btn-primary" id="btnPromptRender" style="font-size:12.5px;padding:10px 18px;background:#ff6a00;font-weight:800;border-radius:8px;box-shadow:0 4px 14px rgba(255,106,0,0.4);cursor:pointer;">
+            ⚡ Gerar Visualização Final Agora
+          </button>
+          <small id="pvrPromptStatus" style="display:block;margin-top:10px;font-size:11px;color:#9ca3af;"></small>
         </div>
         
         <!-- VÍDEO RENDERIZADO COMPLETO (EXIBIÇÃO INTEGRAL EM 100% DO FRAME) -->
