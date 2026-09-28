@@ -58,6 +58,19 @@ def ffprobe_duration(path):
     return float(out.stdout.strip())
 
 
+def check_has_audio(path):
+    """Verifica se o arquivo de vídeo possui stream de áudio válido."""
+    try:
+        proc = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "a",
+             "-show_entries", "stream=codec_type", "-of", "default=nw=1:nk=1", str(path)],
+            capture_output=True, text=True, timeout=5
+        )
+        return "audio" in proc.stdout.lower()
+    except Exception:
+        return False
+
+
 def detect_cuts(path, threshold=0.35):
     """Detecta trocas de cena/corte usando o filtro 'scene' do FFmpeg. Retorna lista de timestamps (s)."""
     proc = subprocess.run(
@@ -148,11 +161,44 @@ HEADLINE_STYLES = {
 }
 
 
-def detect_silences(path, noise_db=-30, min_duration=0.32):
-    """Detecta intervalos de silêncio/pausas usando o filtro silencedetect do FFmpeg."""
+def hex_to_ass_color(hex_str, default="&H00FFFFFF"):
+    """Converte formato hex (#RRGGBB ou #RGB) para formato ASS (&H00BBGGRR&)."""
+    if not hex_str:
+        return default
+    s = str(hex_str).strip().lstrip("#")
+    if len(s) == 3:
+        s = "".join([c * 2 for c in s])
+    if len(s) == 6:
+        r = s[0:2]
+        g = s[2:4]
+        b = s[4:6]
+        return f"&H00{b.upper()}{g.upper()}{r.upper()}"
+    return default
+
+
+def get_audio_volume(path):
+    """Mede o volume médio em dB do áudio usando volumedetect do FFmpeg."""
+    try:
+        cmd = ["ffmpeg", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        m = re.findall(r"mean_volume:\s*([-\d.]+)\s*dB", proc.stderr)
+        if m:
+            return float(m[0])
+    except Exception:
+        pass
+    return -24.0
+
+
+def detect_silences(path, noise_db=None, min_duration=0.22):
+    """Detecta intervalos de silêncio/pausas/respiros usando o filtro silencedetect do FFmpeg com limiar adaptativo."""
+    if noise_db is None:
+        mean_vol = get_audio_volume(path)
+        # Volume adaptativo para fala: para áudio médio em -24dB, ruído de respiro/fundo fica ~ -30dB
+        noise_db = min(-24.0, max(-35.0, mean_vol - 6.0))
+
     cmd = [
         "ffmpeg", "-i", str(path),
-        "-af", f"silencedetect=noise={noise_db}dB:d={min_duration}",
+        "-af", f"silencedetect=noise={noise_db:.1f}dB:d={min_duration}",
         "-f", "null", "-"
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -225,45 +271,73 @@ def chunk_words(words, max_words=3, max_duration=1.25):
 
 
 def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False, headline=None, headline_style="bebas_impact",
-                        headline_start=0.0, headline_end=None, headline_pos="topo", effective_silences=None, caption_style=None):
+                        headline_start=0.0, headline_end=None, headline_pos="topo", effective_silences=None, caption_style=None,
+                        hl_color1=None, hl_color2=None, hl_outline_color=None, caption_disabled=False, hl_color_mode=None,
+                        hl_bold=True, hl_italic=False, hl_underline=False, hl_uppercase=True, hl_text_color=None,
+                        hl_pos_x=0.50, hl_pos_y=None, hl_scale=1.0, sub_pos_x=0.50, sub_pos_y=0.77, sub_scale=1.0):
     if caption_style and (not style or style == "destaque"):
         style = caption_style
-    c = CAPTION_STYLES.get(style, CAPTION_STYLES["destaque"])
-    h = HEADLINE_STYLES.get(headline_style, HEADLINE_STYLES["bebas_impact"])
+    c = dict(CAPTION_STYLES.get(style, CAPTION_STYLES["destaque"]))
+    h = dict(HEADLINE_STYLES.get(headline_style, HEADLINE_STYLES["bebas_impact"]))
 
-    def sty(name, d, align, mv):
+    # Formatação clássica da headline (Negrito, Itálico, Sublinhado, Cores)
+    text_color = hl_text_color or hl_color1
+    if text_color:
+        c_ass = hex_to_ass_color(text_color, h["primary"])
+        h["primary"] = c_ass
+        h["sec"] = c_ass
+    if hl_outline_color:
+        h["outline_c"] = hex_to_ass_color(hl_outline_color, h["outline_c"])
+
+    h_bold = -1 if hl_bold else 0
+    h_italic = -1 if hl_italic else 0
+    h_underline = -1 if hl_underline else 0
+
+    # Coordenadas 2D e escalas personalizadas (padrão zona segura Reels / TikTok: Y >= 420px e <= 1500px)
+    if hl_pos_y is None:
+        hl_pos_y = 0.225 if headline_pos == "topo" else 0.50 if headline_pos == "centro" else 0.77
+
+    hl_x = int(round(float(hl_pos_x if hl_pos_x is not None else 0.50) * 1080))
+    hl_y = int(round(float(hl_pos_y) * 1920))
+    hl_scale_val = float(hl_scale or 1.0)
+    hl_fs = int(round(h["size"] * 4 * hl_scale_val))
+
+    sub_x = int(round(float(sub_pos_x if sub_pos_x is not None else 0.50) * 1080))
+    sub_y = int(round(float(sub_pos_y if sub_pos_y is not None else 0.77) * 1920))
+    sub_scale_val = float(sub_scale or 1.0)
+    sub_fs = int(round(c["size"] * 4 * sub_scale_val))
+
+    def sty_sub(name, d):
         return (f"Style: {name},{d['font']},{d['size'] * 4},{d['primary']},{d['sec']},{d['outline_c']},&H00000000,"
-                f"{d['bold']},0,0,0,100,100,0,0,{d['bs']},{d['outline']},0,{align},70,70,{mv},1")
+                f"{d['bold']},0,0,0,100,100,0,0,{d['bs']},{d['outline']},0,2,100,140,440,1")
 
-    # Posicionamento da Headline: topo (align 8, mv 200), centro (align 5, mv 0), base (align 2, mv 160)
-    hl_align = 8
-    hl_mv = 200
-    if headline_pos == "centro":
-        hl_align = 5
-        hl_mv = 0
-    elif headline_pos == "base":
-        hl_align = 2
-        hl_mv = 160
+    def sty_hl(name, d):
+        return (f"Style: {name},{d['font']},{d['size'] * 4},{d['primary']},{d['sec']},{d['outline_c']},&H00000000,"
+                f"{h_bold},{h_italic},{h_underline},0,100,100,0,0,{d['bs']},{d['outline']},0,8,100,140,430,1")
 
     header = (
         "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n\n[V4+ Styles]\n"
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
         "MarginR, MarginV, Encoding\n"
-        + sty("Default", c, 2, 280) + "\n" + sty("Headline", h, hl_align, hl_mv) + "\n\n[Events]\n"
+        + sty_sub("Default", c) + "\n" + sty_hl("Headline", h) + "\n\n[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
 
     def fmt_time(t):
         return f"{int(t // 3600)}:{int((t % 3600) // 60):02d}:{t % 60:05.2f}"
 
-    def tx(text, d):
+    def tx_hl(text):
+        text = text.replace("\n", " ").strip()
+        return text.upper() if hl_uppercase else text
+
+    def tx_sub(text, d):
         text = text.replace("\n", " ").strip()
         return text.upper() if d["upper"] else text
 
     lines = [header]
 
-    # Headline com intervalo de início e fim customizáveis
+    # Headline com intervalo de início e fim customizáveis e posição 2D do canvas
     if headline:
         h_start = float(headline_start or 0.0)
         h_end = float(headline_end if (headline_end is not None and float(headline_end) > 0) else 5.0)
@@ -271,25 +345,26 @@ def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False
             h_start = map_time_after_cuts(h_start, effective_silences)
             h_end = map_time_after_cuts(h_end, effective_silences)
         if h_end > h_start:
-            lines.append(f"Dialogue: 1,{fmt_time(h_start)},{fmt_time(h_end)},Headline,,0,0,0,,{tx(headline, h)}\n")
+            lines.append(f"Dialogue: 1,{fmt_time(h_start)},{fmt_time(h_end)},Headline,,0,0,0,,{{\\an5\\pos({hl_x},{hl_y})\\fs{hl_fs}}}{tx_hl(headline)}\n")
 
-    # Coleta todas as palavras de todos os segmentos
+    # Coleta todas as palavras de todos os segmentos se legendas estiverem ativadas
     all_words = []
-    for seg in segments:
-        if seg.get("words"):
-            all_words.extend(seg["words"])
-        elif seg.get("text"):
-            w_list = seg["text"].split()
-            if w_list:
-                step = (seg["end"] - seg["start"]) / len(w_list)
-                for idx, w_str in enumerate(w_list):
-                    all_words.append({
-                        "word": w_str,
-                        "start": round(seg["start"] + idx * step, 2),
-                        "end": round(seg["start"] + (idx + 1) * step, 2)
-                    })
+    if not caption_disabled and style != "nenhuma" and caption_style != "nenhuma":
+        for seg in segments:
+            if seg.get("words"):
+                all_words.extend(seg["words"])
+            elif seg.get("text"):
+                w_list = seg["text"].split()
+                if w_list:
+                    step = (seg["end"] - seg["start"]) / len(w_list)
+                    for idx, w_str in enumerate(w_list):
+                        all_words.append({
+                            "word": w_str,
+                            "start": round(seg["start"] + idx * step, 2),
+                            "end": round(seg["start"] + (idx + 1) * step, 2)
+                        })
 
-    # Divide em chunks virais curtos (1 a 3 palavras por tela)
+    # Divide em chunks virais curtos (1 a 3 palavras por tela) posicionados no canvas
     chunks = chunk_words(all_words, max_words=3, max_duration=1.25)
     for chunk in chunks:
         c_start = chunk[0]["start"]
@@ -301,11 +376,13 @@ def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False
             continue
 
         if karaoke:
-            # Karaokê dinâmico palavra por palavra
-            text = "".join(f"{{\\k{max(1, int(round((w['end'] - w['start']) * 100)))}}}{tx(w['word'], c)} " for w in chunk)
+            # Karaokê dinâmico palavra por palavra com tamanho e posição do canvas
+            k_words = "".join(f"{{\\k{max(1, int(round((w['end'] - w['start']) * 100)))}}}{tx_sub(w['word'], c)} " for w in chunk)
+            line_text = f"{{\\an5\\pos({sub_x},{sub_y})\\fs{sub_fs}}}{k_words.strip()}"
         else:
-            text = " ".join(tx(w["word"], c) for w in chunk)
-        lines.append(f"Dialogue: 0,{fmt_time(c_start)},{fmt_time(c_end)},Default,,0,0,0,,{text.strip()}\n")
+            raw_words = " ".join(tx_sub(w["word"], c) for w in chunk)
+            line_text = f"{{\\an5\\pos({sub_x},{sub_y})\\fs{sub_fs}}}{raw_words.strip()}"
+        lines.append(f"Dialogue: 0,{fmt_time(c_start)},{fmt_time(c_end)},Default,,0,0,0,,{line_text}\n")
 
     out_path.write_text("".join(lines), encoding="utf-8")
 
@@ -316,6 +393,7 @@ def analyze():
     p = find_upload(request.json.get("video_id"))
     if not p:
         return jsonify({"error": "Vídeo não encontrado"}), 404
+    dur = ffprobe_duration(p)
     raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(p), "-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
                          capture_output=True).stdout
     a = np.abs(np.frombuffer(raw, dtype=np.int16).astype(np.float32))
@@ -324,7 +402,23 @@ def analyze():
         peaks = [float(x.max()) for x in np.array_split(a, 400)]
         m = max(peaks) or 1
         peaks = [round(x / m, 3) for x in peaks]
-    return jsonify({"duration": ffprobe_duration(p), "cuts": detect_cuts(p), "peaks": peaks})
+
+    scene_cuts = detect_cuts(p)
+    silences = detect_silences(p)
+    silence_cuts = []
+    for s, e in silences:
+        mid = round((s + e) / 2, 2)
+        if 0.4 < mid < dur - 0.4:
+            silence_cuts.append(mid)
+
+    # Combina cortes de cena e respiros de áudio sem duplicatas
+    all_cuts = sorted(list(set(scene_cuts + silence_cuts)))
+    clean_cuts = []
+    for c in all_cuts:
+        if not clean_cuts or (c - clean_cuts[-1] >= 0.3):
+            clean_cuts.append(c)
+
+    return jsonify({"duration": dur, "cuts": clean_cuts, "peaks": peaks})
 
 
 @app.route("/")
@@ -350,7 +444,17 @@ def serve_media(file_id):
     p = find_upload(file_id)
     if not p:
         return jsonify({"error": "Arquivo não encontrado"}), 404
-    return send_from_directory(p.parent, p.name, conditional=True)
+    mimetype = None
+    suf = p.suffix.lower()
+    if suf == ".mp4":
+        mimetype = "video/mp4"
+    elif suf in (".jpg", ".jpeg"):
+        mimetype = "image/jpeg"
+    elif suf == ".png":
+        mimetype = "image/png"
+    elif suf == ".webp":
+        mimetype = "image/webp"
+    return send_from_directory(p.parent, p.name, mimetype=mimetype, conditional=True)
 
 
 @app.route("/upload_music", methods=["POST"])
@@ -382,6 +486,81 @@ def transcribe():
     return jsonify({"segments": result})
 
 
+@app.route("/upload_media", methods=["POST"])
+def upload_media():
+    files = request.files.getlist("media")
+    if not files:
+        if "file" in request.files:
+            files = [request.files.get("file")]
+        elif "video2" in request.files:
+            files = [request.files.get("video2")]
+    if not files:
+        return jsonify({"error": "Nenhum arquivo enviado"}), 400
+
+    results = []
+    for f in files:
+        if not f or not f.filename:
+            continue
+        ext = Path(f.filename).suffix.lower() or ".jpg"
+        file_id = uuid.uuid4().hex[:10]
+        path = UPLOAD_DIR / f"{file_id}{ext}"
+        f.save(path)
+        is_img = ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
+        dur = 0.0
+        has_audio = False
+        if not is_img:
+            try:
+                dur = ffprobe_duration(path)
+            except Exception:
+                dur = 5.0
+            has_audio = check_has_audio(path)
+
+            # Se o vídeo não for MP4 ou puder ter codec não suportado pelo browser (ex: .mov, .mkv, .avi)
+            # converte para MP4 (H.264 + AAC + faststart) para renderização imediata sem tela preta
+            if ext != ".mp4":
+                conv_path = UPLOAD_DIR / f"{file_id}.mp4"
+                try:
+                    subprocess.run([
+                        "ffmpeg", "-y", "-i", str(path),
+                        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "22",
+                        "-c:a", "aac", "-b:a", "128k",
+                        "-movflags", "+faststart",
+                        str(conv_path)
+                    ], capture_output=True, timeout=30, check=True)
+                    if conv_path.exists() and conv_path.stat().st_size > 500:
+                        path.unlink(missing_ok=True)
+                        path = conv_path
+                        ext = ".mp4"
+                except Exception as ex:
+                    print("Warning: transcode web media:", ex)
+
+        results.append({
+            "file_id": file_id,
+            "filename": f.filename,
+            "is_image": is_img,
+            "duration": dur,
+            "has_audio": has_audio,
+            "url": f"/media/{file_id}"
+        })
+    return jsonify({"items": results})
+
+
+@app.route("/upload_headline_template", methods=["POST"])
+def upload_headline_template():
+    file = request.files.get("template") or request.files.get("file")
+    if not file:
+        return jsonify({"error": "Nenhum arquivo enviado"}), 400
+    ext = Path(file.filename).suffix.lower() or ".png"
+    file_id = uuid.uuid4().hex[:10]
+    path = UPLOAD_DIR / f"{file_id}{ext}"
+    file.save(path)
+    return jsonify({
+        "template_id": file_id,
+        "filename": file.filename,
+        "url": f"/media/{file_id}"
+    })
+
+
 @app.route("/export", methods=["POST"])
 def export():
     data = request.json
@@ -392,17 +571,35 @@ def export():
     video2_path = find_upload(data.get("video2_id")) if data.get("video2_id") else None
     segments = data.get("segments", [])
     caption_style = data.get("caption_style", "hormozi")
+    caption_disabled = bool(data.get("caption_disabled")) or (caption_style == "nenhuma")
     headline = (data.get("headline") or "").strip()
     headline_style = data.get("headline_style", "bebas_impact")
     headline_start = float(data.get("headline_start", 0.0) or 0.0)
     headline_end = float(data.get("headline_end", 0.0) or 0.0)
     headline_pos = data.get("headline_pos", "topo")
+    headline_template_id = data.get("headline_template_id")
+    hl_mode = data.get("hl_mode", "text")
+    hl_scale = float(data.get("hl_scale", 1.0) or 1.0)
+    hl_pos_x = float(data.get("hl_pos_x", 0.50) if data.get("hl_pos_x") is not None else 0.50)
+    hl_pos_y = float(data.get("hl_pos_y", 0.225) if data.get("hl_pos_y") is not None else (0.225 if headline_pos == "topo" else 0.50 if headline_pos == "centro" else 0.77))
+    sub_pos_x = float(data.get("sub_pos_x", 0.50) if data.get("sub_pos_x") is not None else 0.50)
+    sub_pos_y = float(data.get("sub_pos_y", 0.77) if data.get("sub_pos_y") is not None else 0.77)
+    sub_scale = float(data.get("sub_scale", 1.0) or 1.0)
+    hl_bold = bool(data.get("hl_bold", True))
+    hl_italic = bool(data.get("hl_italic", False))
+    hl_underline = bool(data.get("hl_underline", False))
+    hl_uppercase = bool(data.get("hl_uppercase", True))
+    hl_text_color = data.get("hl_text_color") or data.get("hl_color1") or "#ffffff"
+    hl_outline_color = data.get("hl_outline_color") or "#000000"
     karaoke = bool(data.get("karaoke")) or ("karaoke" in caption_style) or (caption_style in ("hormozi", "karaoke_neon"))
     zoom_continuous = bool(data.get("zoom_continuous"))
     zoom_cuts = bool(data.get("zoom_cuts"))
     flash_cuts = bool(data.get("flash_cuts"))
     cut_silence = bool(data.get("cut_silence", True))
+    framing_x = float(data.get("framing_x", 0.50) if data.get("framing_x") is not None else 0.50)
     framing_y = float(data.get("framing_y", 0.10) if data.get("framing_y") is not None else 0.10)
+    framing_x2 = float(data.get("framing_x2", 0.50) if data.get("framing_x2") is not None else 0.50)
+    framing_y2 = float(data.get("framing_y2", 0.50) if data.get("framing_y2") is not None else 0.50)
     tracking = bool(data.get("tracking"))
     music_id = data.get("music_id")
     music_volume = float(data.get("music_volume", 0.15))
@@ -415,69 +612,204 @@ def export():
     try:
         duration = ffprobe_duration(video_path)
 
-        # --- Passo A: construir vídeo base 1080x1920 com enquadramento ajustável ---
+        # --- Passo A: construir vídeo base 1080x1920 com enquadramento ajustável em X e Y ---
         base_path = job_tmp / "base.mp4"
         tipo = data.get("tipo", "unica")
 
-        # Enquadramento vertical: framing_y padrão 0.10 dá 10% do topo, mantendo 100% da cabeça do apresentador
-        crop_y_split = f"max(0\\,min(ih-960\\,(ih-960)*{framing_y:.3f}))"
+        # Divisão da tela: 60% Apresentador (1152px) e 40% Mídia (768px), totalizando 1920px
+        H_PRES = 1152
+        H_MEDIA = 768
+
+        crop_x_split = f"max(0\\,min(iw-1080\\,(iw-1080)*{framing_x:.3f}))"
+        crop_y_split = f"max(0\\,min(ih-{H_PRES}\\,(ih-{H_PRES})*{framing_y:.3f}))"
+        crop_x_single = f"max(0\\,min(iw-1080\\,(iw-1080)*{framing_x:.3f}))"
         crop_y_single = f"max(0\\,min(ih-1920\\,(ih-1920)*{framing_y:.3f}))"
 
-        if video2_path:
-            IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-            is_v2_img = video2_path.suffix.lower() in IMAGE_EXTS
-            v2_args = ["-loop", "1", "-framerate", "30", "-t", f"{duration:.2f}", "-i", str(video2_path)] if is_v2_img else ["-i", str(video2_path)]
+        # Coleta e valida lista de mídias para tela dividida e B-roll (imagens e vídeos)
+        media_items_raw = data.get("media_items") or []
+        if not media_items_raw and video2_path and data.get("video2_id") != data.get("video_id"):
+            media_items_raw = [{
+                "file_id": data.get("video2_id"),
+                "start": 0.0,
+                "end": duration,
+                "framing_x": framing_x2,
+                "framing_y": framing_y2
+            }]
+
+        valid_media = []
+        for m in media_items_raw:
+            fid = m.get("file_id")
+            # ISOLAMENTO DO VÍDEO PRINCIPAL: não mistura com o vídeo do apresentador
+            if not fid or fid == data.get("video_id"):
+                continue
+            p = find_upload(fid)
+            if p and p != video_path:
+                s = max(0.0, float(m.get("start", 0.0) or 0.0))
+                e = float(m.get("end", duration) or duration)
+                if e <= s:
+                    e = min(duration, s + 3.0)
+                fx = float(m.get("framing_x", framing_x2) if m.get("framing_x") is not None else framing_x2)
+                fy = float(m.get("framing_y", framing_y2) if m.get("framing_y") is not None else framing_y2)
+                is_img = p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
+                is_muted = bool(m.get("muted", False))
+                vol = float(m.get("volume", 1.0) if m.get("volume") is not None else 1.0)
+                vol = max(0.0, min(2.0, vol))
+                has_audio = (not is_img) and (not is_muted) and (vol > 0.0) and check_has_audio(p)
+                valid_media.append({
+                    "path": p,
+                    "start": round(s, 2),
+                    "end": round(e, 2),
+                    "framing_x": max(0.0, min(1.0, fx)),
+                    "framing_y": max(0.0, min(1.0, fy)),
+                    "is_img": is_img,
+                    "muted": is_muted,
+                    "volume": vol,
+                    "has_audio": has_audio
+                })
+
+        if tipo in ("dividida", "dividida2") and valid_media:
+            # Constrói inputs e filter_complex para tela dividida 60%/40% com múltiplas imagens/vídeos
+            media_input_args = []
+            filter_parts = []
+            
+            # Base para o slot de mídia (1080x768 - 40%)
+            filter_parts.append(f"color=c=#0d1016:s=1080x{H_MEDIA}:r=30:d={duration:.2f}[mbase0]")
+            
+            for i, item in enumerate(valid_media):
+                idx = 1 + i
+                crop_x_item = f"max(0\\,min(iw-1080\\,(iw-1080)*{item['framing_x']:.3f}))"
+                crop_y_item = f"max(0\\,min(ih-{H_MEDIA}\\,(ih-{H_MEDIA})*{item['framing_y']:.3f}))"
+                if item["is_img"]:
+                    media_input_args.extend(["-loop", "1", "-framerate", "30", "-t", f"{duration:.2f}", "-i", str(item["path"])])
+                    filter_parts.append(
+                        f"[{idx}:v]scale=1080:{H_MEDIA}:force_original_aspect_ratio=increase,crop=1080:{H_MEDIA}:{crop_x_item}:{crop_y_item}[mscale{i}];"
+                        f"[mbase{i}][mscale{i}]overlay=0:0:enable='between(t,{item['start']:.2f},{item['end']:.2f})':eof_action=pass[mbase{i+1}]"
+                    )
+                else:
+                    media_input_args.extend(["-stream_loop", "-1", "-i", str(item["path"])])
+                    filter_parts.append(
+                        f"[{idx}:v]scale=1080:{H_MEDIA}:force_original_aspect_ratio=increase,crop=1080:{H_MEDIA}:{crop_x_item}:{crop_y_item},setpts=PTS-STARTPTS+{item['start']:.2f}/TB[mscale{i}];"
+                        f"[mbase{i}][mscale{i}]overlay=0:0:enable='between(t,{item['start']:.2f},{item['end']:.2f})':eof_action=pass[mbase{i+1}]"
+                    )
+
+            mmedia = f"[mbase{len(valid_media)}]"
+            
+            # Slot do apresentador (1080x1152 - 60%)
+            filter_parts.append(f"[0:v]scale=1080:{H_PRES}:force_original_aspect_ratio=increase,crop=1080:{H_PRES}:{crop_x_split}:{crop_y_split}[pres]")
 
             if tipo == "dividida":
-                # Layout div1: Vídeo 2 (mídia/imagem) em cima, Vídeo 1 (apresentador) embaixo com framing_y
-                fc = (
-                    "[1:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960:(iw-1080)/2:(ih-960)/2[top];"
-                    f"[0:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960:(iw-1080)/2:{crop_y_split}[bot];"
-                    "[top][bot]vstack=inputs=2[v]"
-                )
-            elif tipo == "dividida2":
-                # Layout div2: Vídeo 1 (apresentador) em cima com framing_y, Vídeo 2 (mídia/imagem) embaixo
-                fc = (
-                    f"[0:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960:(iw-1080)/2:{crop_y_split}[top];"
-                    "[1:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960:(iw-1080)/2:(ih-960)/2[bot];"
-                    "[top][bot]vstack=inputs=2[v]"
-                )
+                # Mídia (40%) em cima, Apresentador (60%) embaixo
+                filter_parts.append(f"{mmedia}[pres]vstack=inputs=2[v]")
             else:
-                # Fallback se video2 fornecido em modo tela única
-                fc = (
-                    f"[0:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960:(iw-1080)/2:{crop_y_split}[top];"
-                    "[1:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960:(iw-1080)/2:(ih-960)/2[bot];"
-                    "[top][bot]vstack=inputs=2[v]"
-                )
+                # Apresentador (60%) em cima, Mídia (40%) embaixo
+                filter_parts.append(f"[pres]{mmedia}vstack=inputs=2[v]")
 
-            if is_v2_img:
-                cmd = [
-                    "ffmpeg", "-y", "-i", str(video_path), *v2_args,
-                    "-filter_complex", fc,
-                    "-map", "[v]", "-map", "0:a", "-r", "30",
-                    "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac",
-                    str(base_path),
-                ]
+            # Mixagem de áudio dos clipes de vídeo da timeline com som ativo
+            audio_tracks = []
+            for i, item in enumerate(valid_media):
+                idx = 1 + i
+                if item["has_audio"]:
+                    dur_clip = item["end"] - item["start"]
+                    delay_ms = int(item["start"] * 1000)
+                    vol = item["volume"]
+                    filter_parts.append(
+                        f"[{idx}:a]atrim=0:{dur_clip:.2f},asetpts=PTS-STARTPTS,adelay={delay_ms}|{delay_ms},volume={vol:.2f}[aclip{i}]"
+                    )
+                    audio_tracks.append(f"[aclip{i}]")
+
+            if audio_tracks:
+                filter_parts.append(f"[0:a]{''.join(audio_tracks)}amix=inputs={1 + len(audio_tracks)}:duration=first:dropout_transition=0[aout]")
+                audio_map_args = ["-map", "[aout]"]
             else:
-                fc += ";[0:a][1:a]amix=inputs=2:duration=first[a]"
-                cmd = [
-                    "ffmpeg", "-y", "-i", str(video_path), *v2_args,
-                    "-filter_complex", fc,
-                    "-map", "[v]", "-map", "[a]", "-r", "30",
-                    "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac",
-                    str(base_path),
-                ]
+                audio_map_args = ["-map", "0:a"]
+
+            fc = ";".join(filter_parts)
+            cmd = [
+                "ffmpeg", "-y", "-i", str(video_path), *media_input_args,
+                "-filter_complex", fc,
+                "-map", "[v]", *audio_map_args, "-r", "30",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac",
+                str(base_path)
+            ]
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elif tipo in ("dividida", "dividida2"):
+            # Modo tela dividida 60%/40% sem mídias: slot escuro e elegante
+            filter_parts = [
+                f"color=c=#0d1016:s=1080x{H_MEDIA}:r=30:d={duration:.2f}[mmedia]",
+                f"[0:v]scale=1080:{H_PRES}:force_original_aspect_ratio=increase,crop=1080:{H_PRES}:{crop_x_split}:{crop_y_split}[pres]"
+            ]
+            if tipo == "dividida":
+                filter_parts.append("[mmedia][pres]vstack=inputs=2[v]")
+            else:
+                filter_parts.append("[pres][mmedia]vstack=inputs=2[v]")
+            fc = ";".join(filter_parts)
+            cmd = [
+                "ffmpeg", "-y", "-i", str(video_path),
+                "-filter_complex", fc,
+                "-map", "[v]", "-map", "0:a", "-r", "30",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac",
+                str(base_path)
+            ]
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elif valid_media:
+            # Modo tela única com B-roll / mídias na timeline
+            media_input_args = []
+            filter_parts = [f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:{crop_x_single}:{crop_y_single}[basev0]"]
+            for i, item in enumerate(valid_media):
+                idx = 1 + i
+                crop_x_item = f"max(0\\,min(iw-1080\\,(iw-1080)*{item['framing_x']:.3f}))"
+                crop_y_item = f"max(0\\,min(ih-1920\\,(ih-1920)*{item['framing_y']:.3f}))"
+                if item["is_img"]:
+                    media_input_args.extend(["-loop", "1", "-framerate", "30", "-t", f"{duration:.2f}", "-i", str(item["path"])])
+                    filter_parts.append(
+                        f"[{idx}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:{crop_x_item}:{crop_y_item}[mscale{i}];"
+                        f"[basev{i}][mscale{i}]overlay=0:0:enable='between(t,{item['start']:.2f},{item['end']:.2f})':eof_action=pass[basev{i+1}]"
+                    )
+                else:
+                    media_input_args.extend(["-stream_loop", "-1", "-i", str(item["path"])])
+                    filter_parts.append(
+                        f"[{idx}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:{crop_x_item}:{crop_y_item},setpts=PTS-STARTPTS+{item['start']:.2f}/TB[mscale{i}];"
+                        f"[basev{i}][mscale{i}]overlay=0:0:enable='between(t,{item['start']:.2f},{item['end']:.2f})':eof_action=pass[basev{i+1}]"
+                    )
+            filter_parts.append(f"[basev{len(valid_media)}]copy[v]")
+            # Mixagem de áudio dos clipes de vídeo da timeline com som ativo
+            audio_tracks = []
+            for i, item in enumerate(valid_media):
+                idx = 1 + i
+                if item["has_audio"]:
+                    dur_clip = item["end"] - item["start"]
+                    delay_ms = int(item["start"] * 1000)
+                    vol = item["volume"]
+                    filter_parts.append(
+                        f"[{idx}:a]atrim=0:{dur_clip:.2f},asetpts=PTS-STARTPTS,adelay={delay_ms}|{delay_ms},volume={vol:.2f}[aclip{i}]"
+                    )
+                    audio_tracks.append(f"[aclip{i}]")
+
+            if audio_tracks:
+                filter_parts.append(f"[0:a]{''.join(audio_tracks)}amix=inputs={1 + len(audio_tracks)}:duration=first:dropout_transition=0[aout]")
+                audio_map_args = ["-map", "[aout]"]
+            else:
+                audio_map_args = ["-map", "0:a"]
+
+            fc = ";".join(filter_parts)
+            cmd = [
+                "ffmpeg", "-y", "-i", str(video_path), *media_input_args,
+                "-filter_complex", fc,
+                "-map", "[v]", *audio_map_args, "-r", "30",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac",
+                str(base_path)
+            ]
             subprocess.run(cmd, capture_output=True, text=True, check=True)
         elif tracking:
             points, w, h = detect_face_positions(video_path, sample_every=1.0)
             crop_expr = build_tracking_crop_expr(points, w, h)
             vf = (f"{crop_expr},scale=1080:1920" if crop_expr
-                  else f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)/2:{crop_y_single}")
+                  else f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:{crop_x_single}:{crop_y_single}")
             cmd = ["ffmpeg", "-y", "-i", str(video_path), "-vf", vf, "-r", "30",
                    "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac", str(base_path)]
             subprocess.run(cmd, capture_output=True, text=True, check=True)
         else:
-            vf = f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)/2:{crop_y_single}"
+            vf = f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:{crop_x_single}:{crop_y_single}"
             cmd = ["ffmpeg", "-y", "-i", str(video_path),
                    "-vf", vf,
                    "-r", "30", "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac", str(base_path)]
@@ -488,8 +820,8 @@ def export():
         # --- Passo B: corte de silêncios/respiros + flash nas transições + zoom nos cortes ---
         effective_silences = []
         if cut_silence:
-            raw_silences = detect_silences(current, noise_db=-30, min_duration=0.32)
-            speech_intervals, effective_silences = compute_speech_intervals(duration, raw_silences, pad=0.06)
+            raw_silences = detect_silences(current)
+            speech_intervals, effective_silences = compute_speech_intervals(duration, raw_silences, pad=0.04)
 
             if len(speech_intervals) > 1:
                 n_segs = len(speech_intervals)
@@ -535,19 +867,60 @@ def export():
             if r.returncode == 0:
                 current = zoomed
 
-        # --- Passo C: legendas dinâmicas e headline ---
-        if segments or headline:
+        # --- Passo C: modelo/template de headline + legendas dinâmicas e headline ---
+        if hl_mode == "file" and headline_template_id:
+            tpl_path = find_upload(headline_template_id)
+            if tpl_path:
+                tpl_out = job_tmp / "tpl_applied.mp4"
+                tpl_w = int(round(1080 * hl_scale))
+                target_x = int(round(hl_pos_x * 1080))
+                target_y = int(round(hl_pos_y * 1920))
+                h_start = float(headline_start or 0.0)
+                h_end = float(headline_end if (headline_end and float(headline_end) > 0) else duration)
+                if effective_silences:
+                    h_start = map_time_after_cuts(h_start, effective_silences)
+                    h_end = map_time_after_cuts(h_end, effective_silences)
+                fc_tpl = (
+                    f"[1:v]scale={tpl_w}:-1[tpl];"
+                    f"[0:v][tpl]overlay=x='min(1080-w,max(0,{target_x}-w/2))':y='min(1920-h,max(0,{target_y}-h/2))':enable='between(t,{h_start:.2f},{h_end:.2f})'[v]"
+                )
+                cmd = ["ffmpeg", "-y", "-i", str(current), "-i", str(tpl_path), "-filter_complex", fc_tpl,
+                       "-map", "[v]", "-map", "0:a",
+                       "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "copy", str(tpl_out)]
+                r = subprocess.run(cmd, capture_output=True, text=True)
+                if r.returncode == 0:
+                    current = tpl_out
+
+        has_subtitles = bool(segments) and not caption_disabled and (caption_style != "nenhuma")
+        has_headline_text = bool(headline) and (hl_mode != "file")
+
+        if has_subtitles or has_headline_text:
             ass_path = job_tmp / "subs.ass"
             h_end = headline_end if (headline_end and headline_end > 0) else duration
             build_ass_subtitles(
                 segments, caption_style, ass_path,
                 karaoke=karaoke,
-                headline=headline,
+                headline=(headline if has_headline_text else None),
                 headline_style=headline_style,
                 headline_start=headline_start,
                 headline_end=h_end,
                 headline_pos=headline_pos,
-                effective_silences=effective_silences
+                effective_silences=effective_silences,
+                caption_style=caption_style,
+                hl_color1=hl_text_color,
+                hl_outline_color=hl_outline_color,
+                caption_disabled=caption_disabled,
+                hl_bold=hl_bold,
+                hl_italic=hl_italic,
+                hl_underline=hl_underline,
+                hl_uppercase=hl_uppercase,
+                hl_text_color=hl_text_color,
+                hl_pos_x=hl_pos_x,
+                hl_pos_y=hl_pos_y,
+                hl_scale=hl_scale,
+                sub_pos_x=sub_pos_x,
+                sub_pos_y=sub_pos_y,
+                sub_scale=sub_scale
             )
             captioned = job_tmp / "captioned.mp4"
             vf_ass = f"ass={ass_path.as_posix()}:fontsdir={FONTS_DIR.as_posix()}" if FONTS_DIR.exists() else f"ass={ass_path.as_posix()}"

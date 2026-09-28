@@ -89,36 +89,95 @@
     <div class="sec-group">
       <h4 class="sec-label">TIPO DE EDIÇÃO</h4>
       <div class="opts-grid tipos-grid" id="tipoC"></div>
-      <div id="split2" class="card split-card" style="display:none">
-        <small>Segundo vídeo ou imagem fixa (para o modo de tela dividida):</small>
-        <input type="file" id="video2Input" accept="video/*,image/*"><small id="up2Status"></small>
-      </div>
-
-      <div class="card" style="margin-top:12px;background:#0d1016;border:1px solid #1f2533;border-radius:10px;padding:12px 16px;">
+      
+      <!-- GERENCIADOR DE MÍDIAS / IMAGENS PARA TELA DIVIDIDA -->
+      <div id="split2" class="card split-card" style="display:none;background:#0d1016;border:1px solid #1f2533;border-radius:10px;padding:14px 16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <b style="font-size:12px;color:#e5e7eb;">↕ Enquadramento Vertical da Câmera (ajustar altura da cabeça / corte):</b>
-          <span id="framingYVal" style="font-size:12px;font-weight:700;color:#ff6a00;">10% (Ideal)</span>
+          <b style="color:#e5e7eb;font-size:12px;display:flex;align-items:center;gap:6px;">
+            <span>🖼️</span> Imagens e Mídias para Tela Dividida (40%)
+          </b>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="btn btn-secondary" id="btnDistributeMedia" title="Distribuir mídias igualmente ao longo do vídeo" style="font-size:11px;padding:3px 8px;">⚡ Distribuir no Vídeo</button>
+            <button type="button" class="btn btn-primary" id="btnSelectMedia" style="font-size:11px;padding:3px 10px;">+ Adicionar Imagem/Vídeo</button>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <button type="button" class="btn btn-secondary framing-step-btn" id="btnNudgeUpEstilo" title="Subir câmera (-5%)" style="padding:3px 8px;font-size:11px;">▲ Subir</button>
-          <input type="range" id="framingY" min="0" max="60" value="10" step="2" style="flex:1;">
-          <button type="button" class="btn btn-secondary framing-step-btn" id="btnNudgeDownEstilo" title="Descer câmera (+5%)" style="padding:3px 8px;font-size:11px;">Descer ▼</button>
-        </div>
-        <div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap;">
-          <small style="color:#9ca3af;font-size:11px;">Predefinições:</small>
-          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="0" style="padding:2px 8px;font-size:10px;">0% (Topo / Max Cabeça)</button>
-          <button type="button" class="btn btn-primary on btn-framing-preset" data-val="10" style="padding:2px 8px;font-size:10px;">10% (Ideal)</button>
-          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="20" style="padding:2px 8px;font-size:10px;">20% (Padrão)</button>
-          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="35" style="padding:2px 8px;font-size:10px;">35% (Centro)</button>
-        </div>
-        <small style="color:#6b7280;display:block;margin-top:6px;">Arraste para mover o vídeo para cima ou para baixo e garantir que a cabeça nunca seja cortada. Você também pode ajustar após a edição final na aba Visual!</small>
+        <input type="file" id="mediaUploadInput" multiple accept="image/*,video/*" style="display:none;">
+        <small style="color:#9ca3af;font-size:11.5px;margin:2px 0 8px;">Adicione uma ou mais imagens/vídeos para a tela dividida. Na Fase 2 (Visual), você pode arrastar no próprio vídeo para qualquer direção (cima, baixo ou lados) em tempo real!</small>
+        <small id="mediaUploadStatus" style="font-size:11px;color:#ff6a00;margin-bottom:6px;"></small>
+        <div id="mediaItemsListEstilo" class="media-items-list"></div>
       </div>
     </div>
 
     <div class="sec-group">
-      <h4 class="sec-label">ESTILO DE HEADLINE</h4>
-      <div class="opts-grid headlines-grid" id="hlC"></div>
-      <input type="text" id="hlText" class="hl-input" placeholder="Texto da headline (ex: ASSISTA ATÉ O FINAL)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+        <h4 class="sec-label" style="margin:0;">HEADLINE</h4>
+        <!-- Alternância Clara: Texto Nativo vs Modelo/Arquivo (.png) -->
+        <div class="hl-mode-selector" style="display:flex;background:#12161f;border:1px solid #1f2533;border-radius:20px;padding:3px;gap:4px;">
+          <button type="button" class="btn hl-mode-btn on" id="btnHlModeText" data-mode="text" style="font-size:11px;padding:4px 12px;border-radius:16px;">✍️ Texto Nativo</button>
+          <button type="button" class="btn hl-mode-btn" id="btnHlModeFile" data-mode="file" style="font-size:11px;padding:4px 12px;border-radius:16px;">📁 Modelo / Template</button>
+        </div>
+      </div>
+
+      <!-- PAINEL 1: TEXTO NATIVO DA HEADLINE -->
+      <div id="hlTextModePanel">
+        <div class="opts-grid headlines-grid" id="hlC"></div>
+        <input type="text" id="hlText" class="hl-input" placeholder="Texto da headline (ex: ASSISTA ATÉ O FINAL)">
+        
+        <!-- Formatação Clássica da Headline (Negrito, Itálico, Sublinhado, Caixa Alta, Cores) -->
+        <div class="card" style="margin-top:10px;background:#0d1016;border:1px solid #1f2533;border-radius:10px;padding:12px 14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <!-- Barra de ferramentas clássica: Bold, Italic, Underline, Uppercase -->
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:11px;color:#9ca3af;font-weight:700;">Estilo:</span>
+              <div class="fmt-toolbar" style="display:flex;gap:4px;">
+                <button type="button" class="fmt-btn on" id="btnHlBold" title="Negrito (Bold)"><b>B</b></button>
+                <button type="button" class="fmt-btn" id="btnHlItalic" title="Itálico (Italic)"><i>I</i></button>
+                <button type="button" class="fmt-btn" id="btnHlUnderline" title="Sublinhado (Underline)"><u>U</u></button>
+                <button type="button" class="fmt-btn on" id="btnHlUppercase" title="Caixa Alta (TODAS MAIÚSCULAS)"><b>TT</b></button>
+              </div>
+            </div>
+
+            <!-- Seletores de cores sólidas e contorno (Sem Glow / Sem Gradiente) -->
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <label for="hlTextColor" style="font-size:11.5px;color:#cbd5e1;font-weight:600;">Texto:</label>
+                <input type="color" id="hlTextColor" value="#ffffff" style="width:32px;height:26px;border:none;border-radius:4px;cursor:pointer;background:transparent;">
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <label for="hlOutlineColor" style="font-size:11.5px;color:#cbd5e1;font-weight:600;">Borda:</label>
+                <input type="color" id="hlOutlineColor" value="#000000" style="width:32px;height:26px;border:none;border-radius:4px;cursor:pointer;background:transparent;">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAINEL 2: MODELO / TEMPLATE GRÁFICO (.PNG) -->
+      <div id="hlFileModePanel" style="display:none;margin-top:10px;">
+        <div class="card" style="background:#0d1016;border:1px solid #1f2533;border-radius:10px;padding:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div>
+              <b style="font-size:12px;color:#60a5fa;display:flex;align-items:center;gap:6px;">
+                <span>📁</span> Arquivo Modelo de Headline (.png com transparência)
+              </b>
+              <small style="color:#9ca3af;font-size:11px;display:block;margin-top:2px;">Envie uma arte personalizada criada no Photoshop, Canva ou Figma.</small>
+            </div>
+            <button type="button" class="btn btn-primary" id="btnUploadHlTemplate" style="font-size:11.5px;padding:5px 12px;display:flex;align-items:center;gap:5px;">
+              <span>⬆️</span> Subir Modelo (.png)
+            </button>
+            <input type="file" id="hlTemplateInput" accept="image/*" style="display:none;">
+          </div>
+
+          <div id="hlTemplateChip" style="display:none;margin-top:10px;background:#182030;border:1px solid #2d3a54;border-radius:6px;padding:8px 12px;align-items:center;gap:12px;">
+            <img id="hlTemplateThumb" src="" alt="" style="width:48px;height:28px;object-fit:cover;border-radius:4px;border:1px solid #3b4b6e;">
+            <div style="flex:1;overflow:hidden;">
+              <span style="font-size:11.5px;color:#93c5fd;font-weight:700;display:block;">Modelo Ativo</span>
+              <small id="hlTemplateName" style="color:#cbd5e1;font-size:10.5px;margin:0;"></small>
+            </div>
+            <button type="button" id="btnRemoveHlTemplate" title="Remover template personalizado" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;font-weight:700;">Remover ✕</button>
+          </div>
+        </div>
+      </div>
       
       <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;align-items:center;">
         <div>
@@ -130,7 +189,7 @@
           </div>
         </div>
         <div>
-          <small style="color:#9ca3af;font-weight:600;display:block;margin-bottom:4px;">Posição do texto:</small>
+          <small style="color:#9ca3af;font-weight:600;display:block;margin-bottom:4px;">Posição inicial rápida:</small>
           <div style="display:flex;gap:6px;">
             <button type="button" class="btn btn-primary hl-pos-btn on" data-pos="topo" style="padding:4px 10px;font-size:11px;">Topo</button>
             <button type="button" class="btn btn-secondary hl-pos-btn" data-pos="centro" style="padding:4px 10px;font-size:11px;">Centro</button>
@@ -142,11 +201,20 @@
           <label style="font-size:11px;color:#9ca3af;">Até: <input type="number" id="hlEnd" value="0" min="0" step="0.5" style="width:55px;padding:4px;background:#12161f;border:1px solid #1f2533;color:#fff;border-radius:4px;">s</label>
         </div>
       </div>
-      <small style="color:#6b7280;margin-top:6px;display:block;">💡 Você também pode <b>clicar e arrastar</b> a barra amarela da Headline (T) diretamente na Timeline na aba Visual!</small>
+      <small style="color:#6b7280;margin-top:6px;display:block;">💡 <b>Manipulação Direta no Canvas:</b> Clique e arraste a Headline livremente no vídeo na Fase 2 para posicionar e redimensionar em tempo real!</small>
     </div>
 
     <div class="sec-group">
-      <h4 class="sec-label">ESTILO DE LEGENDA</h4>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+        <h4 class="sec-label" style="margin:0;">ESTILO DE LEGENDA</h4>
+        <div class="caption-toggle-bar" style="display:flex;align-items:center;gap:8px;background:#12161f;padding:4px 10px;border-radius:20px;border:1px solid #1f2533;">
+          <label class="toggle-switch">
+            <input type="checkbox" id="captionToggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+          <span id="captionToggleText" style="font-weight:700;color:#14b8a6;font-size:11.5px;">Legendas Ativadas</span>
+        </div>
+      </div>
       <div class="opts-grid captions-grid" id="capC"></div>
     </div>
 
@@ -196,42 +264,220 @@
           <div id="tl"></div>
         </div>
       </div>
+
+      <!-- PAINEL DE CONTROLES RÁPIDOS NA ABA VISUAL -->
+      <div class="visual-quick-edits card" style="margin-top:14px;background:#0d1016;border:1px solid #1f2533;border-radius:12px;padding:14px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <b style="font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;">
+            <span style="color:#ff6a00;">✏️</span> Ajustes Rápidos da Edição
+          </b>
+          <small style="color:#9ca3af;margin:0;">Altere headline, legendas ou mídias e clique em Re-renderizar</small>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
+          <!-- Coluna 1: Headline rápida com alternância (Texto Nativo vs Modelo) -->
+          <div style="background:#12161f;border:1px solid #1f2533;border-radius:8px;padding:10px 12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <b style="font-size:11px;color:#eab308;text-transform:uppercase;letter-spacing:0.5px;">Headline</b>
+              <!-- Switcher de Modo: Texto vs Modelo -->
+              <div class="hl-mode-selector" style="display:flex;background:#0d1016;border:1px solid #1f2533;border-radius:14px;padding:2px;gap:2px;">
+                <button type="button" class="btn visual-hl-mode-btn on" id="btnVisualHlModeText" data-mode="text" style="font-size:10px;padding:2px 8px;border-radius:12px;">✍️ Texto</button>
+                <button type="button" class="btn visual-hl-mode-btn" id="btnVisualHlModeFile" data-mode="file" style="font-size:10px;padding:2px 8px;border-radius:12px;">📁 Modelo</button>
+              </div>
+            </div>
+
+            <!-- MODO TEXTO NA ABA VISUAL -->
+            <div id="visualHlTextPanel">
+              <input type="text" id="visualHlText" class="hl-input" placeholder="Texto da headline..." style="margin-top:0;margin-bottom:8px;padding:7px 10px;font-size:12px;width:100%;">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+                <div style="display:flex;gap:4px;">
+                  <button type="button" class="btn btn-primary visual-hl-pos-btn on" data-pos="topo" style="padding:3px 8px;font-size:10px;">Topo</button>
+                  <button type="button" class="btn btn-secondary visual-hl-pos-btn" data-pos="centro" style="padding:3px 8px;font-size:10px;">Centro</button>
+                  <button type="button" class="btn btn-secondary visual-hl-pos-btn" data-pos="base" style="padding:3px 8px;font-size:10px;">Base</button>
+                </div>
+                <select id="visualHlStyleSelect" class="ib" style="font-size:11px;padding:4px 8px;">
+                  <option value="bebas_impact">Impact / Viral</option>
+                  <option value="neon_cyber">Cyber Neon</option>
+                  <option value="contorno">Contorno Branco</option>
+                  <option value="caixa_preta">Caixa Preta</option>
+                  <option value="caixa_laranja">Caixa Laranja</option>
+                  <option value="laranja_texto">Texto Laranja</option>
+                </select>
+              </div>
+              <!-- Formatação clássica da headline na aba Visual -->
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding-top:6px;border-top:1px solid #1a202c;flex-wrap:wrap;">
+                <div class="fmt-toolbar" style="display:flex;gap:3px;">
+                  <button type="button" class="fmt-btn fmt-btn-sm on" id="btnVisualHlBold" title="Negrito (Bold)"><b>B</b></button>
+                  <button type="button" class="fmt-btn fmt-btn-sm" id="btnVisualHlItalic" title="Itálico (Italic)"><i>I</i></button>
+                  <button type="button" class="fmt-btn fmt-btn-sm" id="btnVisualHlUnderline" title="Sublinhado (Underline)"><u>U</u></button>
+                  <button type="button" class="fmt-btn fmt-btn-sm on" id="btnVisualHlUppercase" title="Caixa Alta (TODAS MAIÚSCULAS)"><b>TT</b></button>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <input type="color" id="visualHlTextColor" value="#ffffff" style="width:24px;height:22px;border:none;border-radius:3px;cursor:pointer;background:transparent;" title="Cor do Texto">
+                  <input type="color" id="visualHlOutlineColor" value="#000000" style="width:24px;height:22px;border:none;border-radius:3px;cursor:pointer;background:transparent;" title="Cor do Contorno">
+                </div>
+              </div>
+            </div>
+
+            <!-- MODO MODELO NA ABA VISUAL -->
+            <div id="visualHlFilePanel" style="display:none;padding-top:4px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <button type="button" class="btn btn-secondary" id="btnVisualUploadHlTemplate" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:4px;" title="Subir template gráfico de headline">
+                  <span>⬆️</span> Subir Modelo (.png)
+                </button>
+                <span id="visualHlTemplateIndicator" style="display:none;font-size:10.5px;color:#60a5fa;font-weight:700;">✓ Modelo ativo</span>
+              </div>
+              <small style="color:#9ca3af;font-size:10.5px;display:block;margin-top:6px;">Arraste e redimensione o modelo diretamente no vídeo à direita.</small>
+            </div>
+          </div>
+
+          <!-- Coluna 2: Legenda rápida com toggle e controle dedicado de tamanho (Visual 2) -->
+          <div style="background:#12161f;border:1px solid #1f2533;border-radius:8px;padding:10px 12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <b style="font-size:11px;color:#14b8a6;text-transform:uppercase;letter-spacing:0.5px;">Estilo da Legenda</b>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <label class="toggle-switch-sm">
+                  <input type="checkbox" id="visualCaptionToggle" checked>
+                  <span class="toggle-slider-sm"></span>
+                </label>
+                <span id="visualCaptionToggleLabel" style="font-size:10px;font-weight:700;color:#14b8a6;">Ativada</span>
+              </div>
+            </div>
+            <select id="visualCapStyleSelect" class="ib" style="width:100%;font-size:12px;padding:7px 10px;margin-bottom:10px;">
+              <option value="hormozi">Hormozi Viral</option>
+              <option value="karaoke_neon">Karaokê Neon</option>
+              <option value="pop_destaque">Pop Destaque</option>
+              <option value="destaque">Destaque Branco</option>
+              <option value="karaoke">Karaokê Laranja</option>
+              <option value="serif_luxo">Serifada Luxo</option>
+              <option value="clean_minimal">Clean Minimal</option>
+              <option value="pequena">Pequena Discreta</option>
+              <option value="nenhuma">🚫 Sem Legenda (Vídeo Limpo)</option>
+            </select>
+
+            <!-- NOVO CONTROLE DEDICADO DE TAMANHO DA LEGENDA (VISUAL 2) -->
+            <div style="background:#0d1016;border:1px solid #1f2533;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="font-size:11px;font-weight:700;color:#cbd5e1;display:flex;align-items:center;gap:4px;">
+                  <span>🔤</span> Tamanho da Fonte
+                </span>
+                <span id="visualSubScaleVal" style="font-size:11px;font-weight:800;color:#14b8a6;background:rgba(20,184,166,0.14);border:1px solid rgba(20,184,166,0.3);padding:1px 8px;border-radius:10px;cursor:pointer;" title="Clique para redefinir para 100%">100%</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <button type="button" class="btn btn-secondary" id="btnVisualSubScaleDown" style="padding:2px 10px;font-size:13px;font-weight:800;border-radius:6px;line-height:1;min-width:30px;" title="Diminuir tamanho">-</button>
+                <input type="range" id="visualSubScaleRange" min="50" max="220" step="5" value="100" style="flex:1;accent-color:#14b8a6;cursor:pointer;height:6px;">
+                <button type="button" class="btn btn-secondary" id="btnVisualSubScaleUp" style="padding:2px 10px;font-size:13px;font-weight:800;border-radius:6px;line-height:1;min-width:30px;" title="Aumentar tamanho">+</button>
+              </div>
+            </div>
+
+            <small style="color:#8a90a0;font-size:10.5px;line-height:1.3;margin:0;display:block;">Ajuste o tamanho com precisão no controle acima. Arraste no vídeo apenas para posicionar (X e Y).</small>
+          </div>
+        </div>
+
+        <!-- Mídias da tela dividida na aba visual -->
+        <div id="visualMediaSection" style="display:none;margin-top:12px;background:#12161f;border:1px solid #1f2533;border-radius:8px;padding:10px 12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <b style="font-size:11px;color:#f97316;text-transform:uppercase;letter-spacing:0.5px;">🖼️ Mídias na Timeline (Tela Dividida 40%)</b>
+            <div style="display:flex;gap:6px;">
+              <button type="button" class="btn btn-secondary" id="btnVisualDistribute" style="font-size:10px;padding:2px 7px;">Distribuir</button>
+              <button type="button" class="btn btn-primary" id="btnVisualAddMedia" style="font-size:10px;padding:2px 8px;">+ Adicionar</button>
+            </div>
+          </div>
+          <div id="visualMediaItemsList" class="media-items-list"></div>
+        </div>
+      </div>
     </div>
 
     <div class="prev-video-panel">
       <div class="phone-frame" id="phoneFrame">
         <div class="phone-speaker-notch"></div>
-        <small id="pvLabel" class="preview-tag">Preview Final</small>
-        <div id="framingOverlay" class="framing-drag-overlay" style="display:none">
-          <span id="framingOverlayText">↕ Enquadramento: 10%</span>
+        <small id="pvLabel" class="preview-tag">Modo Edição</small>
+        
+        <div class="preview-top-actions">
+          <button type="button" id="btnToggleSafeZone" class="preview-top-btn" title="Gabarito da Zona Segura Reels/TikTok (420px)">🛡️ Zona Segura</button>
+          <button type="button" id="btnToggleVideoView" class="preview-top-btn preview-mode-toggle" title="Alternar entre modo de edição e vídeo renderizado">👁️ Renderizado</button>
         </div>
-        <video id="pv" controls playsinline></video>
+        
+        <!-- VÍDEO RENDERIZADO COMPLETO (EXIBIÇÃO INTEGRAL EM 100% DO FRAME) -->
+        <video id="pvRenderedFull" class="preview-rendered-full" playsinline controls style="display:none;"></video>
+
+        <!-- ÁREA INTERATIVA DE PREVIEW (TELA ÚNICA OU SPLIT 60%/40%) -->
+        <div id="interactiveSplitView" class="interactive-split-view">
+          <!-- Slot Mídia (40%) -->
+          <div id="previewSlotMedia" class="preview-slot slot-media" title="Clique e arraste em qualquer direção (cima, baixo ou lados) para posicionar em tempo real">
+            <img id="pvMediaImg" class="slot-media-img" style="display:none;" alt="">
+            <video id="pvMediaVideo" class="slot-media-video" style="display:none;" loop playsinline webkit-playsinline preload="auto"></video>
+            <div class="slot-empty-hint" id="pvMediaEmpty">🖼️ Mídia (40%)</div>
+          </div>
+          <!-- Slot Câmera / Apresentador (60%) -->
+          <div id="previewSlotCam" class="preview-slot slot-cam" title="Clique e arraste em qualquer direção (cima, baixo ou lados) para posicionar em tempo real">
+            <!-- VÍDEO PRINCIPAL ISOLADO: APENAS O APRESENTADOR LIMPO NUNCA MISTURADO -->
+            <video id="pv" controls playsinline></video>
+          </div>
+        </div>
+
+        <!-- LINHA GUIA DE DIVISÃO 60%/40% -->
+        <div id="splitGuideLine" class="split-guide-line" style="display:none;">
+          <span class="guide-tag top-tag" id="guideTagTop">Mídia 40%</span>
+          <span class="guide-tag bot-tag" id="guideTagBot">Câmera 60%</span>
+        </div>
+
+        <!-- OVERLAY VISUAL DE ZONA SEGURA (REELS / TIKTOK 420px) -->
+        <div id="safeZoneOverlay" class="safe-zone-overlay" style="display:none;">
+          <div class="sz-band sz-top"><span>⚠️ Zona Morta Topo 420px (Reels/TikTok)</span></div>
+          <div class="sz-band sz-middle"><span>✓ Área 100% Segura para Legendas e Textos</span></div>
+          <div class="sz-band sz-bottom"><span>⚠️ Zona Morta Base 420px (Legendas/Player)</span></div>
+          <div class="sz-margin-right"><span>Botões</span></div>
+        </div>
+
+        <!-- HUD DE ENQUADRAMENTO 2D EM TEMPO REAL -->
+        <div id="framingOverlay" class="framing-drag-overlay" style="display:none">
+          <span id="framingOverlayText">↕ ↔ Ajustando Enquadramento</span>
+        </div>
+
+        <!-- OVERLAY DA HEADLINE (TEXTO, FORMATAÇÃO E MODELO GRÁFICO - MANIPULAÇÃO DIRETA NO CANVAS) -->
+        <div id="hlPreviewOverlay" class="canvas-item-overlay hl-preview-overlay" style="display:none;" tabindex="0">
+          <div class="canvas-item-box" id="hlBox">
+            <img id="hlTemplateOverlayImg" class="hl-template-overlay-img" style="display:none;" alt="">
+            <span id="hlPreviewText" class="hl-preview-text"></span>
+          </div>
+          <div class="canvas-item-controls" id="hlItemControls">
+            <button type="button" class="ci-btn ci-scale-down" id="btnHlScaleDown" title="Diminuir tamanho">-</button>
+            <span class="ci-scale-label" id="hlScaleLabel" title="Clique para redefinir para 100%">100%</span>
+            <button type="button" class="ci-btn ci-scale-up" id="btnHlScaleUp" title="Aumentar tamanho">+</button>
+          </div>
+          <div class="canvas-resize-handle" id="hlResizeHandle" title="Arraste para redimensionar a Headline">↘</div>
+        </div>
+
+        <!-- OVERLAY DE LEGENDA (EXCLUSIVAMENTE PARA REPOSICIONAMENTO ESPACIAL X E Y) -->
+        <div id="subPreviewOverlay" class="canvas-item-overlay sub-preview-overlay" style="display:none;" tabindex="0">
+          <div class="canvas-item-box" id="subBox">
+            <div id="subPreviewContent" class="sub-preview-content"></div>
+          </div>
+        </div>
       </div>
 
-      <!-- PAINEL DE CONTROLE DE ENQUADRAMENTO VERTICAL NA ABA VISUAL -->
+      <!-- PAINEL DE CONTROLE DE ENQUADRAMENTO E RE-RENDERIZAÇÃO NA ABA VISUAL -->
       <div class="card framing-ctrl-card" id="visualFramingCard">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
           <b style="font-size:12px;color:#e5e7eb;display:flex;align-items:center;gap:6px;">
-            <span>↕</span> Enquadramento da Câmera:
+            <span>↕ ↔</span> Enquadramento e Posições no Canvas
           </b>
-          <span id="visualFramingYVal" class="framing-val-pill">10% (Ideal)</span>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span id="visualFramingYVal" class="framing-val-pill" title="Posição 2D do apresentador">Câmera 60%: X 50% · Y 10%</span>
+            <span id="visualMediaFramingYVal" class="framing-val-pill" style="display:none;color:#00d2b4;background:rgba(0,210,180,0.12);border-color:rgba(0,210,180,0.25);" title="Posição 2D da mídia">Mídia 40%: X 50% · Y 50%</span>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <button type="button" class="btn btn-secondary framing-step-btn" id="btnNudgeUp" title="Subir vídeo / mostrar mais cabeça (-5%)" style="padding:4px 8px;font-size:11px;">▲ Subir</button>
-          <input type="range" id="visualFramingY" min="0" max="60" value="10" step="2" style="flex:1;">
-          <button type="button" class="btn btn-secondary framing-step-btn" id="btnNudgeDown" title="Descer vídeo (+5%)" style="padding:4px 8px;font-size:11px;">Descer ▼</button>
+
+        <div class="on-video-hint-box" style="margin-top:4px;">
+          <span style="font-size:16px;line-height:1;">👆</span>
+          <span><b>Ajuste 100% Direto no Canvas (Sem Sliders):</b> Clique e arraste diretamente no vídeo, mídia, headline ou legenda para posicionar e redimensionar livremente em tempo real.</span>
         </div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;">
-          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="0" style="padding:2px 6px;font-size:10px;">0% (Topo/Cabeça)</button>
-          <button type="button" class="btn btn-primary on btn-framing-preset" data-val="10" style="padding:2px 6px;font-size:10px;">10% (Ideal)</button>
-          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="20" style="padding:2px 6px;font-size:10px;">20% (Padrão)</button>
-          <button type="button" class="btn btn-secondary btn-framing-preset" data-val="35" style="padding:2px 6px;font-size:10px;">35% (Centro)</button>
-        </div>
-        <small style="color:#6b7280;display:block;margin-bottom:8px;font-size:10.5px;">💡 Dica: Arraste o vídeo diretamente ou use os botões acima para ajustar a altura da cabeça.</small>
-        <button type="button" class="btn btn-primary" id="btnReapplyFraming" style="width:100%;font-size:12px;padding:8px 12px;">
-          ⚡ Reaplicar Enquadramento no Vídeo Final
+
+        <button type="button" class="btn btn-primary" id="btnReRenderVisual" style="width:100%;font-size:13px;padding:12px 14px;background:#ff6a00;font-weight:800;border-radius:8px;cursor:pointer;margin-top:10px;box-shadow:0 4px 14px rgba(255,106,0,0.35);">
+          ⚡ Atualizar e Renderizar Vídeo
         </button>
-        <small id="visualFramingStatus" style="display:block;text-align:center;margin-top:6px;font-size:11px;color:#9ca3af;"></small>
+        <small id="visualReRenderStatus" style="display:block;text-align:center;margin-top:6px;font-size:11.5px;color:#9ca3af;min-height:16px;"></small>
       </div>
     </div>
   </div>
