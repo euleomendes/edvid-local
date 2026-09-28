@@ -40,7 +40,7 @@ Editor de vídeo automático vertical estilo TikTok/Reels/Shorts rodando **100% 
 
 1. **Clone ou baixe este repositório**:
    ```bash
-   git clone https://github.com/SEU_USUARIO/edvid-local.git
+   git clone https://github.com/euleomendes/edvid-local.git
    cd edvid-local
    ```
 2. **Execute com 1 clique**:
@@ -55,7 +55,7 @@ Editor de vídeo automático vertical estilo TikTok/Reels/Shorts rodando **100% 
 
 1. **Clone ou baixe este repositório**:
    ```bash
-   git clone https://github.com/SEU_USUARIO/edvid-local.git
+   git clone https://github.com/euleomendes/edvid-local.git
    cd edvid-local
    ```
 2. **Certifique-se de ter o Python instalado**:
@@ -70,7 +70,7 @@ Editor de vídeo automático vertical estilo TikTok/Reels/Shorts rodando **100% 
 
 1. **Clone o repositório**:
    ```bash
-   git clone https://github.com/SEU_USUARIO/edvid-local.git
+   git clone https://github.com/euleomendes/edvid-local.git
    cd edvid-local
    ```
 2. **Execute o script**:
