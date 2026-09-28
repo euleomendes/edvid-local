@@ -138,7 +138,8 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
    FASE 2: VISUAL E TIMELINE PROFISSIONAL (IDÊNTICA À IMAGEM 4)
    ======================================================== */
 .vis-layout{display:flex;gap:20px;align-items:flex-start;width:100%}
-.edit-timeline-panel{flex:1.8;min-width:320px;background:#0d1016;border:1px solid #1f2533;border-radius:12px;padding:14px}
+.vis-left-col{flex:1.8;min-width:320px;display:flex;flex-direction:column;gap:12px}
+.edit-timeline-panel{width:100%;box-sizing:border-box;background:#0d1016;border:1px solid #1f2533;border-radius:12px;padding:14px}
 
 /* BARRA DE FERRAMENTAS DA TIMELINE */
 .timeline-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
@@ -310,11 +311,12 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
 .phone-frame video{width:100%;height:100%;object-fit:cover;display:block}
 
 /* PAINEL DE AJUSTES RÁPIDOS INFERIOR (COMPACTO E PROPORCIONAL) */
-.visual-quick-edits{width:100%!important;max-width:100%!important;box-sizing:border-box;margin-top:10px!important;padding:8px 12px!important;background:#0d1016!important;border:1px solid #1f2533!important;border-radius:10px!important}
+.visual-quick-edits{width:100%!important;max-width:100%!important;box-sizing:border-box;margin-top:0!important;padding:8px 12px!important;background:#0d1016!important;border:1px solid #1f2533!important;border-radius:10px!important}
 
 /* RESPONSIVIDADE */
 @media(max-width:768px){
   .vis-layout{flex-direction:column}
+  .vis-left-col{width:100%}
   .prev-video-panel{width:100%;align-items:center}
   .preview-layout{flex-direction:column}
 }

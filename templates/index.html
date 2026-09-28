@@ -239,33 +239,193 @@
 <!-- FASE 2: VISUAL E TIMELINE PROFISSIONAL (IDÊNTICA À IMAGEM 4) -->
 <section id="tab-visual" class="pane">
   <div class="vis-layout">
-    <div class="edit-timeline-panel">
-      <div class="timeline-toolbar">
-        <button class="tb-btn play-btn" id="playBtn" title="Play / Pause">▶</button>
-        <button class="tb-btn step-btn" id="stepBackBtn" title="Voltar ao início">⏮</button>
-        <span id="clock" class="time-clock">0:00.00 / 0:00.00</span>
-        <button class="tb-btn marker-btn" id="markerBtn" title="Marcador de corte"><span class="red-flag">⚑</span> IN</button>
-        <span class="sp"></span>
-        <label class="zoom-wrap">zoom <input type="range" id="zoom" min="5" max="80" value="20"></label>
-        <button class="tb-btn fit-btn" id="fit">fit</button>
+    <!-- COLUNA ESQUERDA: TIMELINE (TOPO) + AJUSTES RÁPIDOS (ABAIXO) -->
+    <div class="vis-left-col">
+      <div class="edit-timeline-panel">
+        <div class="timeline-toolbar">
+          <button class="tb-btn play-btn" id="playBtn" title="Play / Pause">▶</button>
+          <button class="tb-btn step-btn" id="stepBackBtn" title="Voltar ao início">⏮</button>
+          <span id="clock" class="time-clock">0:00.00 / 0:00.00</span>
+          <button class="tb-btn marker-btn" id="markerBtn" title="Marcador de corte"><span class="red-flag">⚑</span> IN</button>
+          <span class="sp"></span>
+          <label class="zoom-wrap">zoom <input type="range" id="zoom" min="5" max="80" value="20"></label>
+          <button class="tb-btn fit-btn" id="fit">fit</button>
+        </div>
+
+        <div class="tlwrap">
+          <div class="lbls">
+            <i title="Marcadores de corte" class="lbl-flag">⚑</i>
+            <i title="Legendas" class="lbl-subs">💬</i>
+            <i title="Cenas e cortes" class="lbl-scenes">🎬</i>
+            <i title="Forma de onda sonora" class="lbl-wave">🔊</i>
+            <i title="Headline" class="lbl-hl">T</i>
+            <i title="Mídias e B-roll" class="lbl-media">🖼</i>
+            <i title="Trilha sonora" class="lbl-music">♫</i>
+          </div>
+          <div class="scroll" id="scroll">
+            <div id="tl"></div>
+          </div>
+        </div>
       </div>
 
-      <div class="tlwrap">
-        <div class="lbls">
-          <i title="Marcadores de corte" class="lbl-flag">⚑</i>
-          <i title="Legendas" class="lbl-subs">💬</i>
-          <i title="Cenas e cortes" class="lbl-scenes">🎬</i>
-          <i title="Forma de onda sonora" class="lbl-wave">🔊</i>
-          <i title="Headline" class="lbl-hl">T</i>
-          <i title="Mídias e B-roll" class="lbl-media">🖼</i>
-          <i title="Trilha sonora" class="lbl-music">♫</i>
+      <!-- PAINEL DE CONTROLES RÁPIDOS NA ABA VISUAL (COMPACTO E PROPORCIONAL) -->
+      <div class="visual-quick-edits card" style="margin-top:0;background:#0d1016;border:1px solid #1f2533;border-radius:10px;padding:8px 12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <b style="font-size:11px;color:#cbd5e1;display:flex;align-items:center;gap:5px;letter-spacing:0.3px;">
+            <span style="color:#ff6a00;">✏️</span> Ajustes Rápidos da Edição
+          </b>
+          <small style="color:#64748b;font-size:10px;margin:0;">Altere headline ou legendas e clique em Atualizar e Renderizar</small>
         </div>
-        <div class="scroll" id="scroll">
-          <div id="tl"></div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;">
+          <!-- Coluna 1: Headline (Texto ou Modelo + Tamanho e Duração compactos) -->
+          <div style="background:#12161f;border:1px solid #1f2533;border-radius:8px;padding:7px 10px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                <b style="font-size:10.5px;color:#eab308;text-transform:uppercase;letter-spacing:0.5px;">Headline</b>
+                <!-- Switcher de Modo: Texto vs Modelo -->
+                <div class="hl-mode-selector" style="display:flex;background:#0d1016;border:1px solid #1f2533;border-radius:12px;padding:1px;gap:2px;">
+                  <button type="button" class="btn visual-hl-mode-btn on" id="btnVisualHlModeText" data-mode="text" style="font-size:9.5px;padding:1px 7px;border-radius:10px;line-height:1.4;">✍️ Texto</button>
+                  <button type="button" class="btn visual-hl-mode-btn" id="btnVisualHlModeFile" data-mode="file" style="font-size:9.5px;padding:1px 7px;border-radius:10px;line-height:1.4;">📁 Modelo</button>
+                </div>
+              </div>
+
+              <!-- MODO TEXTO NA ABA VISUAL -->
+              <div id="visualHlTextPanel" style="padding-top:2px;">
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+                  <input type="text" id="visualHlText" class="hl-input" placeholder="Texto da headline..." style="margin:0;padding:4px 8px;font-size:11px;height:24px;flex:1;">
+                  <select id="visualHlStyleSelect" class="ib" style="font-size:10px;padding:2px 6px;height:24px;max-width:125px;">
+                    <option value="bebas_impact">Impact / Viral</option>
+                    <option value="neon_cyber">Cyber Neon</option>
+                    <option value="contorno">Contorno Branco</option>
+                    <option value="caixa_preta">Caixa Preta</option>
+                    <option value="caixa_laranja">Caixa Laranja</option>
+                    <option value="laranja_texto">Texto Laranja</option>
+                  </select>
+                </div>
+                <!-- Formatação clássica da headline na aba Visual (Linha única compacta) -->
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
+                  <div style="display:flex;gap:2px;">
+                    <button type="button" class="btn btn-primary visual-hl-pos-btn on" data-pos="topo" style="padding:2px 6px;font-size:9.5px;height:20px;line-height:1;">Topo</button>
+                    <button type="button" class="btn btn-secondary visual-hl-pos-btn" data-pos="centro" style="padding:2px 6px;font-size:9.5px;height:20px;line-height:1;">Centro</button>
+                    <button type="button" class="btn btn-secondary visual-hl-pos-btn" data-pos="base" style="padding:2px 6px;font-size:9.5px;height:20px;line-height:1;">Base</button>
+                  </div>
+                  <div class="fmt-toolbar" style="display:flex;gap:2px;">
+                    <button type="button" class="fmt-btn fmt-btn-sm on" id="btnVisualHlBold" title="Negrito (Bold)" style="height:20px;min-width:20px;padding:0 3px;font-size:10px;line-height:1;"><b>B</b></button>
+                    <button type="button" class="fmt-btn fmt-btn-sm" id="btnVisualHlItalic" title="Itálico (Italic)" style="height:20px;min-width:20px;padding:0 3px;font-size:10px;line-height:1;"><i>I</i></button>
+                    <button type="button" class="fmt-btn fmt-btn-sm" id="btnVisualHlUnderline" title="Sublinhado (Underline)" style="height:20px;min-width:20px;padding:0 3px;font-size:10px;line-height:1;"><u>U</u></button>
+                    <button type="button" class="fmt-btn fmt-btn-sm on" id="btnVisualHlUppercase" title="Caixa Alta (TODAS MAIÚSCULAS)" style="height:20px;min-width:20px;padding:0 3px;font-size:9px;line-height:1;"><b>TT</b></button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:4px;">
+                    <input type="color" id="visualHlTextColor" value="#ffffff" style="width:18px;height:18px;border:none;border-radius:3px;cursor:pointer;background:transparent;padding:0;" title="Cor do Texto">
+                    <input type="color" id="visualHlOutlineColor" value="#000000" style="width:18px;height:18px;border:none;border-radius:3px;cursor:pointer;background:transparent;padding:0;" title="Cor do Contorno">
+                  </div>
+                </div>
+              </div>
+
+              <!-- MODO MODELO NA ABA VISUAL (Linha única compacta) -->
+              <div id="visualHlFilePanel" style="display:none;padding:3px 0 5px 0;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <button type="button" class="btn btn-secondary" id="btnVisualUploadHlTemplate" style="font-size:10.5px;padding:3px 8px;height:24px;display:inline-flex;align-items:center;gap:4px;" title="Subir template gráfico de headline">
+                    <span>⬆️</span> Subir Modelo (.png)
+                  </button>
+                  <span id="visualHlTemplateIndicator" style="display:none;font-size:10px;color:#60a5fa;font-weight:700;">✓ Modelo ativo</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- CONTROLES UNIFICADOS DE TAMANHO E DURAÇÃO (LADO A LADO) -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:5px;background:#0d1016;border:1px solid #1a2230;border-radius:6px;padding:5px 8px;">
+              <!-- Tamanho da Headline -->
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+                  <span style="font-size:9.5px;font-weight:700;color:#94a3b8;display:flex;align-items:center;gap:3px;">
+                    <span>📐</span> Tamanho
+                  </span>
+                  <span id="visualHlScaleVal" style="font-size:9.5px;font-weight:800;color:#eab308;background:rgba(234,179,8,0.14);border:1px solid rgba(234,179,8,0.3);padding:0 5px;border-radius:8px;cursor:pointer;" title="Clique para redefinir para 100%">100%</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <button type="button" class="btn btn-secondary" id="btnVisualHlScaleDown" style="padding:0 5px;height:20px;font-size:11px;font-weight:800;border-radius:4px;min-width:20px;line-height:1;" title="Diminuir tamanho">-</button>
+                  <input type="range" id="visualHlScaleRange" min="50" max="250" step="5" value="100" style="flex:1;accent-color:#eab308;cursor:pointer;height:4px;">
+                  <button type="button" class="btn btn-secondary" id="btnVisualHlScaleUp" style="padding:0 5px;height:20px;font-size:11px;font-weight:800;border-radius:4px;min-width:20px;line-height:1;" title="Aumentar tamanho">+</button>
+                </div>
+              </div>
+
+              <!-- Duração na Tela -->
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+                  <span style="font-size:9.5px;font-weight:700;color:#94a3b8;display:flex;align-items:center;gap:3px;">
+                    <span>⏱️</span> Duração
+                  </span>
+                  <span id="visualHlTimingVal" style="font-size:9.5px;font-weight:800;color:#f97316;background:rgba(249,115,22,0.14);border:1px solid rgba(249,115,22,0.3);padding:0 5px;border-radius:8px;">Vídeo Todo</span>
+                </div>
+                <div style="display:flex;gap:3px;align-items:center;">
+                  <button type="button" class="btn btn-secondary visual-hl-dur-btn" data-dur="5" style="flex:1;padding:2px 4px;font-size:9.5px;font-weight:700;height:20px;line-height:1;">5s</button>
+                  <button type="button" class="btn btn-secondary visual-hl-dur-btn" data-dur="10" style="flex:1;padding:2px 4px;font-size:9.5px;font-weight:700;height:20px;line-height:1;">10s</button>
+                  <button type="button" class="btn btn-primary visual-hl-dur-btn on" data-dur="all" style="flex:1;padding:2px 4px;font-size:9.5px;font-weight:700;height:20px;line-height:1;">Todo</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Coluna 2: Legenda rápida com toggle, estilo e controle dedicado de tamanho -->
+          <div style="background:#12161f;border:1px solid #1f2533;border-radius:8px;padding:7px 10px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <b style="font-size:10.5px;color:#14b8a6;text-transform:uppercase;letter-spacing:0.5px;">Estilo da Legenda</b>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <label class="toggle-switch-sm" style="transform:scale(0.85);margin:0;">
+                    <input type="checkbox" id="visualCaptionToggle" checked>
+                    <span class="toggle-slider-sm"></span>
+                  </label>
+                  <span id="visualCaptionToggleLabel" style="font-size:9.5px;font-weight:700;color:#14b8a6;">Ativada</span>
+                </div>
+              </div>
+              <select id="visualCapStyleSelect" class="ib" style="width:100%;font-size:11px;padding:3px 8px;margin:2px 0 5px 0;height:25px;">
+                <option value="hormozi">Hormozi Viral</option>
+                <option value="karaoke_neon">Karaokê Neon</option>
+                <option value="pop_destaque">Pop Destaque</option>
+                <option value="destaque">Destaque Branco</option>
+                <option value="karaoke">Karaokê Laranja</option>
+                <option value="serif_luxo">Serifada Luxo</option>
+                <option value="clean_minimal">Clean Minimal</option>
+                <option value="pequena">Pequena Discreta</option>
+                <option value="nenhuma">🚫 Sem Legenda (Vídeo Limpo)</option>
+              </select>
+            </div>
+
+            <!-- CONTROLE DEDICADO DE TAMANHO DA LEGENDA -->
+            <div style="background:#0d1016;border:1px solid #1a2230;border-radius:6px;padding:5px 8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+                <span style="font-size:9.5px;font-weight:700;color:#94a3b8;display:flex;align-items:center;gap:3px;">
+                  <span>🔤</span> Tamanho da Fonte
+                </span>
+                <span id="visualSubScaleVal" style="font-size:9.5px;font-weight:800;color:#14b8a6;background:rgba(20,184,166,0.14);border:1px solid rgba(20,184,166,0.3);padding:0 5px;border-radius:8px;cursor:pointer;" title="Clique para redefinir para 100%">100%</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;">
+                <button type="button" class="btn btn-secondary" id="btnVisualSubScaleDown" style="padding:0 5px;height:20px;font-size:11px;font-weight:800;border-radius:4px;min-width:20px;line-height:1;" title="Diminuir tamanho">-</button>
+                <input type="range" id="visualSubScaleRange" min="50" max="220" step="5" value="100" style="flex:1;accent-color:#14b8a6;cursor:pointer;height:4px;">
+                <button type="button" class="btn btn-secondary" id="btnVisualSubScaleUp" style="padding:0 5px;height:20px;font-size:11px;font-weight:800;border-radius:4px;min-width:20px;line-height:1;" title="Aumentar tamanho">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mídias da tela dividida na aba visual -->
+        <div id="visualMediaSection" style="display:none;margin-top:8px;background:#12161f;border:1px solid #1f2533;border-radius:8px;padding:6px 10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <b style="font-size:10.5px;color:#f97316;text-transform:uppercase;letter-spacing:0.5px;">🖼️ Mídias na Timeline (Tela Dividida 40%)</b>
+            <div style="display:flex;gap:4px;">
+              <button type="button" class="btn btn-secondary" id="btnVisualDistribute" style="font-size:9.5px;padding:2px 6px;">Distribuir</button>
+              <button type="button" class="btn btn-primary" id="btnVisualAddMedia" style="font-size:9.5px;padding:2px 7px;">+ Adicionar</button>
+            </div>
+          </div>
+          <div id="visualMediaItemsList" class="media-items-list"></div>
         </div>
       </div>
     </div>
 
+    <!-- COLUNA DIREITA: PREVIEW DEDICADO -->
     <div class="prev-video-panel">
       <!-- SISTEMA DE DUPLO PREVIEW (EDIÇÃO VS. RENDERIZAÇÃO FINAL) -->
       <div class="dual-preview-bar">
@@ -377,162 +537,6 @@
         </button>
         <small id="visualReRenderStatus" style="display:block;text-align:center;margin-top:6px;font-size:11.5px;color:#9ca3af;min-height:16px;"></small>
       </div>
-    </div>
-  </div>
-
-  <!-- PAINEL DE CONTROLES RÁPIDOS NA ABA VISUAL (COMPACTO E PROPORCIONAL) -->
-  <div class="visual-quick-edits card" style="margin-top:10px;background:#0d1016;border:1px solid #1f2533;border-radius:10px;padding:8px 12px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-      <b style="font-size:11px;color:#cbd5e1;display:flex;align-items:center;gap:5px;letter-spacing:0.3px;">
-        <span style="color:#ff6a00;">✏️</span> Ajustes Rápidos da Edição
-      </b>
-      <small style="color:#64748b;font-size:10px;margin:0;">Altere headline ou legendas e clique em Atualizar e Renderizar</small>
-    </div>
-
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;">
-      <!-- Coluna 1: Headline (Texto ou Modelo + Tamanho e Duração compactos) -->
-      <div style="background:#12161f;border:1px solid #1f2533;border-radius:8px;padding:7px 10px;display:flex;flex-direction:column;justify-content:space-between;">
-        <div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-            <b style="font-size:10.5px;color:#eab308;text-transform:uppercase;letter-spacing:0.5px;">Headline</b>
-            <!-- Switcher de Modo: Texto vs Modelo -->
-            <div class="hl-mode-selector" style="display:flex;background:#0d1016;border:1px solid #1f2533;border-radius:12px;padding:1px;gap:2px;">
-              <button type="button" class="btn visual-hl-mode-btn on" id="btnVisualHlModeText" data-mode="text" style="font-size:9.5px;padding:1px 7px;border-radius:10px;line-height:1.4;">✍️ Texto</button>
-              <button type="button" class="btn visual-hl-mode-btn" id="btnVisualHlModeFile" data-mode="file" style="font-size:9.5px;padding:1px 7px;border-radius:10px;line-height:1.4;">📁 Modelo</button>
-            </div>
-          </div>
-
-          <!-- MODO TEXTO NA ABA VISUAL -->
-          <div id="visualHlTextPanel" style="padding-top:2px;">
-            <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
-              <input type="text" id="visualHlText" class="hl-input" placeholder="Texto da headline..." style="margin:0;padding:4px 8px;font-size:11px;height:24px;flex:1;">
-              <select id="visualHlStyleSelect" class="ib" style="font-size:10px;padding:2px 6px;height:24px;max-width:125px;">
-                <option value="bebas_impact">Impact / Viral</option>
-                <option value="neon_cyber">Cyber Neon</option>
-                <option value="contorno">Contorno Branco</option>
-                <option value="caixa_preta">Caixa Preta</option>
-                <option value="caixa_laranja">Caixa Laranja</option>
-                <option value="laranja_texto">Texto Laranja</option>
-              </select>
-            </div>
-            <!-- Formatação clássica da headline na aba Visual (Linha única compacta) -->
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
-              <div style="display:flex;gap:2px;">
-                <button type="button" class="btn btn-primary visual-hl-pos-btn on" data-pos="topo" style="padding:2px 6px;font-size:9.5px;height:20px;line-height:1;">Topo</button>
-                <button type="button" class="btn btn-secondary visual-hl-pos-btn" data-pos="centro" style="padding:2px 6px;font-size:9.5px;height:20px;line-height:1;">Centro</button>
-                <button type="button" class="btn btn-secondary visual-hl-pos-btn" data-pos="base" style="padding:2px 6px;font-size:9.5px;height:20px;line-height:1;">Base</button>
-              </div>
-              <div class="fmt-toolbar" style="display:flex;gap:2px;">
-                <button type="button" class="fmt-btn fmt-btn-sm on" id="btnVisualHlBold" title="Negrito (Bold)" style="height:20px;min-width:20px;padding:0 3px;font-size:10px;line-height:1;"><b>B</b></button>
-                <button type="button" class="fmt-btn fmt-btn-sm" id="btnVisualHlItalic" title="Itálico (Italic)" style="height:20px;min-width:20px;padding:0 3px;font-size:10px;line-height:1;"><i>I</i></button>
-                <button type="button" class="fmt-btn fmt-btn-sm" id="btnVisualHlUnderline" title="Sublinhado (Underline)" style="height:20px;min-width:20px;padding:0 3px;font-size:10px;line-height:1;"><u>U</u></button>
-                <button type="button" class="fmt-btn fmt-btn-sm on" id="btnVisualHlUppercase" title="Caixa Alta (TODAS MAIÚSCULAS)" style="height:20px;min-width:20px;padding:0 3px;font-size:9px;line-height:1;"><b>TT</b></button>
-              </div>
-              <div style="display:flex;align-items:center;gap:4px;">
-                <input type="color" id="visualHlTextColor" value="#ffffff" style="width:18px;height:18px;border:none;border-radius:3px;cursor:pointer;background:transparent;padding:0;" title="Cor do Texto">
-                <input type="color" id="visualHlOutlineColor" value="#000000" style="width:18px;height:18px;border:none;border-radius:3px;cursor:pointer;background:transparent;padding:0;" title="Cor do Contorno">
-              </div>
-            </div>
-          </div>
-
-          <!-- MODO MODELO NA ABA VISUAL (Linha única compacta) -->
-          <div id="visualHlFilePanel" style="display:none;padding:3px 0 5px 0;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <button type="button" class="btn btn-secondary" id="btnVisualUploadHlTemplate" style="font-size:10.5px;padding:3px 8px;height:24px;display:inline-flex;align-items:center;gap:4px;" title="Subir template gráfico de headline">
-                <span>⬆️</span> Subir Modelo (.png)
-              </button>
-              <span id="visualHlTemplateIndicator" style="display:none;font-size:10px;color:#60a5fa;font-weight:700;">✓ Modelo ativo</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- CONTROLES UNIFICADOS DE TAMANHO E DURAÇÃO (LADO A LADO) -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:5px;background:#0d1016;border:1px solid #1a2230;border-radius:6px;padding:5px 8px;">
-          <!-- Tamanho da Headline -->
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <span style="font-size:9.5px;font-weight:700;color:#94a3b8;display:flex;align-items:center;gap:3px;">
-                <span>📐</span> Tamanho
-              </span>
-              <span id="visualHlScaleVal" style="font-size:9.5px;font-weight:800;color:#eab308;background:rgba(234,179,8,0.14);border:1px solid rgba(234,179,8,0.3);padding:0 5px;border-radius:8px;cursor:pointer;" title="Clique para redefinir para 100%">100%</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:4px;">
-              <button type="button" class="btn btn-secondary" id="btnVisualHlScaleDown" style="padding:0 5px;height:20px;font-size:11px;font-weight:800;border-radius:4px;min-width:20px;line-height:1;" title="Diminuir tamanho">-</button>
-              <input type="range" id="visualHlScaleRange" min="50" max="250" step="5" value="100" style="flex:1;accent-color:#eab308;cursor:pointer;height:4px;">
-              <button type="button" class="btn btn-secondary" id="btnVisualHlScaleUp" style="padding:0 5px;height:20px;font-size:11px;font-weight:800;border-radius:4px;min-width:20px;line-height:1;" title="Aumentar tamanho">+</button>
-            </div>
-          </div>
-
-          <!-- Duração na Tela -->
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <span style="font-size:9.5px;font-weight:700;color:#94a3b8;display:flex;align-items:center;gap:3px;">
-                <span>⏱️</span> Duração
-              </span>
-              <span id="visualHlTimingVal" style="font-size:9.5px;font-weight:800;color:#f97316;background:rgba(249,115,22,0.14);border:1px solid rgba(249,115,22,0.3);padding:0 5px;border-radius:8px;">Vídeo Todo</span>
-            </div>
-            <div style="display:flex;gap:3px;align-items:center;">
-              <button type="button" class="btn btn-secondary visual-hl-dur-btn" data-dur="5" style="flex:1;padding:2px 4px;font-size:9.5px;font-weight:700;height:20px;line-height:1;">5s</button>
-              <button type="button" class="btn btn-secondary visual-hl-dur-btn" data-dur="10" style="flex:1;padding:2px 4px;font-size:9.5px;font-weight:700;height:20px;line-height:1;">10s</button>
-              <button type="button" class="btn btn-primary visual-hl-dur-btn on" data-dur="all" style="flex:1;padding:2px 4px;font-size:9.5px;font-weight:700;height:20px;line-height:1;">Todo</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Coluna 2: Legenda rápida com toggle, estilo e controle dedicado de tamanho -->
-      <div style="background:#12161f;border:1px solid #1f2533;border-radius:8px;padding:7px 10px;display:flex;flex-direction:column;justify-content:space-between;">
-        <div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-            <b style="font-size:10.5px;color:#14b8a6;text-transform:uppercase;letter-spacing:0.5px;">Estilo da Legenda</b>
-            <div style="display:flex;align-items:center;gap:4px;">
-              <label class="toggle-switch-sm" style="transform:scale(0.85);margin:0;">
-                <input type="checkbox" id="visualCaptionToggle" checked>
-                <span class="toggle-slider-sm"></span>
-              </label>
-              <span id="visualCaptionToggleLabel" style="font-size:9.5px;font-weight:700;color:#14b8a6;">Ativada</span>
-            </div>
-          </div>
-          <select id="visualCapStyleSelect" class="ib" style="width:100%;font-size:11px;padding:3px 8px;margin:2px 0 5px 0;height:25px;">
-            <option value="hormozi">Hormozi Viral</option>
-            <option value="karaoke_neon">Karaokê Neon</option>
-            <option value="pop_destaque">Pop Destaque</option>
-            <option value="destaque">Destaque Branco</option>
-            <option value="karaoke">Karaokê Laranja</option>
-            <option value="serif_luxo">Serifada Luxo</option>
-            <option value="clean_minimal">Clean Minimal</option>
-            <option value="pequena">Pequena Discreta</option>
-            <option value="nenhuma">🚫 Sem Legenda (Vídeo Limpo)</option>
-          </select>
-        </div>
-
-        <!-- CONTROLE DEDICADO DE TAMANHO DA LEGENDA -->
-        <div style="background:#0d1016;border:1px solid #1a2230;border-radius:6px;padding:5px 8px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-            <span style="font-size:9.5px;font-weight:700;color:#94a3b8;display:flex;align-items:center;gap:3px;">
-              <span>🔤</span> Tamanho da Fonte
-            </span>
-            <span id="visualSubScaleVal" style="font-size:9.5px;font-weight:800;color:#14b8a6;background:rgba(20,184,166,0.14);border:1px solid rgba(20,184,166,0.3);padding:0 5px;border-radius:8px;cursor:pointer;" title="Clique para redefinir para 100%">100%</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:4px;">
-            <button type="button" class="btn btn-secondary" id="btnVisualSubScaleDown" style="padding:0 5px;height:20px;font-size:11px;font-weight:800;border-radius:4px;min-width:20px;line-height:1;" title="Diminuir tamanho">-</button>
-            <input type="range" id="visualSubScaleRange" min="50" max="220" step="5" value="100" style="flex:1;accent-color:#14b8a6;cursor:pointer;height:4px;">
-            <button type="button" class="btn btn-secondary" id="btnVisualSubScaleUp" style="padding:0 5px;height:20px;font-size:11px;font-weight:800;border-radius:4px;min-width:20px;line-height:1;" title="Aumentar tamanho">+</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Mídias da tela dividida na aba visual -->
-    <div id="visualMediaSection" style="display:none;margin-top:8px;background:#12161f;border:1px solid #1f2533;border-radius:8px;padding:6px 10px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <b style="font-size:10.5px;color:#f97316;text-transform:uppercase;letter-spacing:0.5px;">🖼️ Mídias na Timeline (Tela Dividida 40%)</b>
-        <div style="display:flex;gap:4px;">
-          <button type="button" class="btn btn-secondary" id="btnVisualDistribute" style="font-size:9.5px;padding:2px 6px;">Distribuir</button>
-          <button type="button" class="btn btn-primary" id="btnVisualAddMedia" style="font-size:9.5px;padding:2px 7px;">+ Adicionar</button>
-        </div>
-      </div>
-      <div id="visualMediaItemsList" class="media-items-list"></div>
     </div>
   </div>
 </section>
