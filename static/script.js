@@ -1074,8 +1074,27 @@ function drawTL() {
     return chip(b, bounds[i + 1], sName);
   }).join("");
 
-  // 4. Headline
-  const hl = ($("#visualHlText") && $("#visualHlText").value.trim()) || ($("#hlText") && $("#hlText").value.trim()) || "";
+  // 4. Headline (Texto ou Modelo Customizado de Upload)
+  const isFileMode = S.hlMode === "file";
+  const hasTemplate = S.hlTemplate && S.hlTemplate.url;
+  const hlText = ($("#visualHlText") && $("#visualHlText").value.trim()) || ($("#hlText") && $("#hlText").value.trim()) || "";
+
+  let showHlTrack = false;
+  let isTemplateHl = false;
+  let hlLabel = "";
+
+  if (isFileMode || hasTemplate) {
+    showHlTrack = true;
+    isTemplateHl = true;
+    hlLabel = hasTemplate ? (S.hlTemplate.filename || "Modelo de Headline") : "📁 Suba um Modelo de Headline";
+  } else if (hlText) {
+    showHlTrack = true;
+    hlLabel = hlText;
+  }
+
+  const hlStart = Math.max(0, S.hlStart !== undefined ? S.hlStart : 0);
+  const hlEnd = (S.hlEnd && S.hlEnd > hlStart) ? Math.min(d, S.hlEnd) : d;
+  const hlWidth = Math.max(28, (hlEnd - hlStart) * pps);
 
   // 5. Mídias / Imagens na Timeline (Faixa 6)
   let mediaHtml = "";
@@ -1103,15 +1122,24 @@ function drawTL() {
     <div class="trk sc">${scenesHtml}</div>
     <!-- Faixa 4: Forma de onda de áudio em amarelo-esverdeado -->
     <div class="trk"><canvas id="wv" width="${W}" height="34"></canvas></div>
-    <!-- Faixa 5: Headline em âmbar com barra arrastável -->
+    <!-- Faixa 5: Headline em âmbar/laranja com barra arrastável e trim -->
     <div class="trk hl" id="trkHl">
-      ${hl ? `
-        <u class="hl-bar" id="hlBar" style="left:${(S.hlStart || 0) * pps}px;width:${Math.max(24, (((S.hlEnd && S.hlEnd > (S.hlStart || 0)) ? Math.min(d, S.hlEnd) : d) - (S.hlStart || 0)) * pps)}px;cursor:grab;" title="Arraste para mover pela timeline ou puxe as bordas para mudar início/fim">
-          <span class="hl-handle hl-handle-l" title="Ajustar tempo inicial"></span>
-          <span class="hl-label-text">${hl}</span>
-          <span class="hl-handle hl-handle-r" title="Ajustar tempo final"></span>
+      ${showHlTrack ? `
+        <u class="hl-bar ${isTemplateHl ? 'hl-bar-template' : ''}" id="hlBar" 
+           style="left:${hlStart * pps}px;width:${hlWidth}px;cursor:grab;" 
+           title="${isTemplateHl ? 'Modelo de Headline' : 'Headline'}: ${hlStart.toFixed(1)}s a ${hlEnd.toFixed(1)}s. Puxe as bordas para aparar/cortar a exibição ou arraste o corpo para mover.">
+          <span class="hl-handle hl-handle-l" title="Arrastar para alterar início"></span>
+          ${isTemplateHl && hasTemplate ? `<span class="hl-thumb-mini"><img src="${S.hlTemplate.url}" alt=""></span>` : ''}
+          <span class="hl-label-text">${isTemplateHl ? '🖼️ ' : '🏷️ '}${hlLabel}</span>
+          <span class="hl-time-badge">${hlStart.toFixed(1)}s–${hlEnd.toFixed(1)}s</span>
+          ${isTemplateHl && hasTemplate ? `<span class="hl-del-btn" id="tlDelHlBtn" title="Remover modelo de headline">✕</span>` : ''}
+          <span class="hl-handle hl-handle-r" title="Arrastar para aparar/cortar fim (duração)"></span>
         </u>
-      ` : ""}
+      ` : `
+        <span class="tl-add-hl-prompt" id="tlAddHlPrompt" title="Adicionar Headline ou Subir Modelo">
+          <span>+</span> Adicionar Headline / Subir Modelo
+        </span>
+      `}
     </div>
     <!-- Faixa 6: Mídia B-roll / Imagens da tela dividida -->
     <div class="trk media">${mediaHtml}</div>
@@ -1123,6 +1151,29 @@ function drawTL() {
   const tlPrompt = $("#tlAddMediaPrompt");
   if (tlPrompt && mediaUploadInput) {
     tlPrompt.onclick = () => mediaUploadInput.click();
+  }
+
+  const delHlBtn = $("#tlDelHlBtn");
+  if (delHlBtn) {
+    delHlBtn.onclick = e => {
+      e.stopPropagation();
+      removeHlTemplate();
+    };
+  }
+
+  const tlHlPrompt = $("#tlAddHlPrompt");
+  if (tlHlPrompt) {
+    tlHlPrompt.onclick = () => {
+      if (S.hlMode === "file" && hlTemplateInput) {
+        hlTemplateInput.click();
+      } else {
+        const inp = $("#visualHlText") || $("#hlText");
+        if (inp) {
+          inp.focus();
+          inp.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
+    };
   }
 
   // Desenhar a forma de onda sonora em amarelo-esverdeado (#bbf43d)
@@ -1147,7 +1198,7 @@ function drawTL() {
 
 // INTERAÇÕES DA TIMELINE (SEEK)
 const tl_seek = e => {
-  if (e.target.closest("#hlBar") || e.target.closest(".hl-handle") ||
+  if (e.target.closest("#hlBar") || e.target.closest(".hl-handle") || e.target.closest("#tlDelHlBtn") ||
       e.target.closest(".media-bar") || e.target.closest(".media-handle") || e.target.closest(".media-del-btn")) return;
   const tl = $("#tl");
   if (!tl) return;
@@ -1161,6 +1212,7 @@ const tl_seek = e => {
   if (S.viewMode !== "rendered") {
     updateMediaPreviewAtTime(seekTime);
     updateSubtitleOverlayAtTime(seekTime);
+    updateHeadlineOverlay(seekTime);
   }
 };
 
@@ -1513,6 +1565,17 @@ enable2DFramingDrag();
 // ========================================================
 // ALTERNÂNCIA CLARA DE HEADLINE (TEXTO NATIVO VS MODELO / TEMPLATE)
 // ========================================================
+function updateHeadlineTimingDisplay() {
+  const d = S.dur || 10;
+  const start = Math.max(0, S.hlStart !== undefined ? S.hlStart : 0);
+  const end = (S.hlEnd && S.hlEnd > start) ? Math.min(d, S.hlEnd) : d;
+  const timingVal = $("#visualHlTimingVal");
+  if (timingVal) {
+    const isFull = (start === 0 && end >= d - 0.1);
+    timingVal.textContent = isFull ? "Vídeo Todo" : `${start.toFixed(1)}s – ${end.toFixed(1)}s (${(end - start).toFixed(1)}s)`;
+  }
+}
+
 function setHlMode(mode) {
   if (S.viewMode === "rendered") setVideoViewMode("original");
   S.hlMode = mode;
@@ -1528,7 +1591,9 @@ function setHlMode(mode) {
   if (textPanel2) textPanel2.style.display = (mode === "text") ? "block" : "none";
   if (filePanel2) filePanel2.style.display = (mode === "file") ? "block" : "none";
 
+  updateHeadlineTimingDisplay();
   updateHeadlineOverlay();
+  drawTL();
 }
 
 document.querySelectorAll(".hl-mode-btn, .visual-hl-mode-btn").forEach(btn => {
@@ -1538,7 +1603,7 @@ document.querySelectorAll(".hl-mode-btn, .visual-hl-mode-btn").forEach(btn => {
 // ========================================================
 // CONTROLES DE HEADLINE (MANIPULAÇÃO DIRETA NO CANVAS 60 FPS)
 // ========================================================
-function updateHeadlineOverlay() {
+function updateHeadlineOverlay(curTime) {
   const overlay = $("#hlPreviewOverlay");
   if (!overlay) return;
 
@@ -1551,6 +1616,27 @@ function updateHeadlineOverlay() {
   const hlVal = ($("#visualHlText") && $("#visualHlText").value.trim()) || ($("#hlText") && $("#hlText").value.trim()) || "";
   const hasTemplate = S.hlTemplate && S.hlTemplate.url;
   const isFileMode = S.hlMode === "file";
+
+  // Se não há texto e não há modelo/arquivo, não exibe
+  if (!isFileMode && !hlVal) {
+    overlay.style.display = "none";
+    return;
+  }
+
+  // Controle Temporal: Verifica se o vídeo está dentro da janela de exibição da Headline
+  const time = (curTime !== undefined) ? curTime : (pv ? pv.currentTime : 0);
+  const hStart = Math.max(0, S.hlStart !== undefined ? S.hlStart : 0);
+  const d = S.dur || 10;
+  const hEnd = (S.hlEnd && S.hlEnd > hStart) ? Math.min(d, S.hlEnd) : d;
+
+  const isEditingHl = (isDragging && dragInfo && dragInfo.type && dragInfo.type.startsWith("hl-")) ||
+                      (overlay.classList.contains("is-dragging") || overlay.classList.contains("is-selected"));
+
+  // Se o playhead estiver fora do intervalo [hStart, hEnd] e o usuário não estiver manipulando o elemento, esconde
+  if (!isEditingHl && (time < hStart || time > hEnd)) {
+    overlay.style.display = "none";
+    return;
+  }
 
   overlay.style.display = "flex";
   if (!overlay.classList.contains("is-dragging")) {
@@ -1570,6 +1656,8 @@ function updateHeadlineOverlay() {
 
   const scaleLbl = $("#hlScaleLabel");
   if (scaleLbl) scaleLbl.textContent = `${curPct}%`;
+
+  updateHeadlineTimingDisplay();
 
   const tplImg = $("#hlTemplateOverlayImg");
   const textSpan = $("#hlPreviewText");
@@ -1956,18 +2044,23 @@ if (btnToggleSafeZone && safeZoneOverlay) {
   };
 }
 
+function removeHlTemplate() {
+  S.hlTemplate = null;
+  const chip = $("#hlTemplateChip");
+  const ind = $("#visualHlTemplateIndicator");
+  if (chip) chip.style.display = "none";
+  if (ind) ind.style.display = "none";
+  const tplInput = $("#hlTemplateInput");
+  if (tplInput) tplInput.value = "";
+  updateHeadlineTimingDisplay();
+  const pvCam = $("#pv");
+  updateHeadlineOverlay(pvCam ? pvCam.currentTime : 0);
+  drawTL();
+}
+
 const btnRemoveHlTemplate = $("#btnRemoveHlTemplate");
 if (btnRemoveHlTemplate) {
-  btnRemoveHlTemplate.onclick = () => {
-    S.hlTemplate = null;
-    const chip = $("#hlTemplateChip");
-    const ind = $("#visualHlTemplateIndicator");
-    if (chip) chip.style.display = "none";
-    if (ind) ind.style.display = "none";
-    const tplInput = $("#hlTemplateInput");
-    if (tplInput) tplInput.value = "";
-    updateHeadlineOverlay();
-  };
+  btnRemoveHlTemplate.onclick = removeHlTemplate;
 }
 
 // Gerenciamento de Upload de Template / Modelo de Headline
@@ -1979,6 +2072,7 @@ async function handleHlTemplateFile(file) {
     const res = await fetch("/upload_headline_template", { method: "POST", body: fd }).then(r => r.json());
     if (res.template_id) {
       S.hlTemplate = res;
+      setHlMode("file");
       const chip = $("#hlTemplateChip");
       const thumb = $("#hlTemplateThumb");
       const name = $("#hlTemplateName");
@@ -1987,7 +2081,18 @@ async function handleHlTemplateFile(file) {
       if (thumb) thumb.src = res.url;
       if (name) name.textContent = res.filename;
       if (ind) ind.style.display = "inline-block";
-      updateHeadlineOverlay();
+
+      // Inicializa tempo de exibição cobrindo o vídeo se ainda não estiver definido
+      if (!S.hlEnd || S.hlEnd <= (S.hlStart || 0)) {
+        S.hlEnd = S.dur || 10;
+      }
+      if ($("#hlStart")) $("#hlStart").value = S.hlStart || 0;
+      if ($("#hlEnd")) $("#hlEnd").value = S.hlEnd;
+
+      updateHeadlineTimingDisplay();
+      const pvCam = $("#pv");
+      updateHeadlineOverlay(pvCam ? pvCam.currentTime : 0);
+      drawTL();
     }
   } catch (err) {
     console.error("Erro ao subir template de headline:", err);
@@ -2179,29 +2284,36 @@ if (visualCapStyleSelect) {
   };
 }
 
-document.querySelectorAll(".hl-dur-btn").forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll(".hl-dur-btn").forEach(b => {
-      b.classList.remove("on", "btn-primary");
-      b.classList.add("btn-secondary");
-    });
-    btn.classList.add("on", "btn-primary");
-    btn.classList.remove("btn-secondary");
-    const durType = btn.dataset.dur;
-    if (durType === "5") {
-      S.hlStart = 0;
-      S.hlEnd = 5;
-    } else if (durType === "10") {
-      S.hlStart = 0;
-      S.hlEnd = 10;
-    } else {
-      S.hlStart = 0;
-      S.hlEnd = S.dur || 0;
-    }
-    if ($("#hlStart")) $("#hlStart").value = S.hlStart;
-    if ($("#hlEnd")) $("#hlEnd").value = S.hlEnd;
-    drawTL();
-  };
+function applyHeadlineDuration(durType) {
+  const d = S.dur || 10;
+  if (durType === "5") {
+    S.hlStart = 0;
+    S.hlEnd = Math.min(d, 5);
+  } else if (durType === "10") {
+    S.hlStart = 0;
+    S.hlEnd = Math.min(d, 10);
+  } else {
+    S.hlStart = 0;
+    S.hlEnd = d;
+  }
+  if ($("#hlStart")) $("#hlStart").value = S.hlStart;
+  if ($("#hlEnd")) $("#hlEnd").value = S.hlEnd;
+
+  document.querySelectorAll(".hl-dur-btn, .visual-hl-dur-btn").forEach(b => {
+    const isSel = (b.dataset.dur === durType);
+    b.classList.toggle("on", isSel);
+    b.classList.toggle("btn-primary", isSel);
+    b.classList.toggle("btn-secondary", !isSel);
+  });
+
+  updateHeadlineTimingDisplay();
+  const pvCam = $("#pv");
+  updateHeadlineOverlay(pvCam ? pvCam.currentTime : 0);
+  drawTL();
+}
+
+document.querySelectorAll(".hl-dur-btn, .visual-hl-dur-btn").forEach(btn => {
+  btn.onclick = () => applyHeadlineDuration(btn.dataset.dur);
 });
 
 const hlStartInput = $("#hlStart");
@@ -2209,40 +2321,57 @@ const hlEndInput = $("#hlEnd");
 if (hlStartInput) {
   hlStartInput.onchange = function() {
     S.hlStart = Math.max(0, parseFloat(this.value) || 0);
+    updateHeadlineTimingDisplay();
+    const pvCam = $("#pv");
+    updateHeadlineOverlay(pvCam ? pvCam.currentTime : 0);
     drawTL();
   };
 }
 if (hlEndInput) {
   hlEndInput.onchange = function() {
     S.hlEnd = Math.max(0, parseFloat(this.value) || 0);
+    updateHeadlineTimingDisplay();
+    const pvCam = $("#pv");
+    updateHeadlineOverlay(pvCam ? pvCam.currentTime : 0);
     drawTL();
   };
 }
 
 // ========================================================
-// DRAG E RESIZE DE HEADLINE E MÍDIAS DIRETAMENTE NA TIMELINE
+// DRAG E RESIZE / TRIM DE HEADLINE E MÍDIAS NA TIMELINE
+// Suporte a Mouse e Touch com sincronização do player em tempo real
 // ========================================================
 let isDragging = false;
 let dragInfo = null;
 
-document.addEventListener("mousedown", e => {
+const getPointerClientX = e => (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+
+function onTimelinePointerDown(e) {
   const pps = S.pps || 20;
   const d = S.dur || 10;
 
-  // 1. Headline Drag & Resize
+  // Se clicou no botão de exclusão de modelo da timeline
+  if (e.target.closest("#tlDelHlBtn")) {
+    removeHlTemplate();
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  // 1. Headline Drag & Trim (Aparar Entrada e Saída / Mover)
   const hlBar = e.target.closest("#hlBar");
   if (hlBar) {
     isDragging = true;
-    const start = S.hlStart || 0;
+    const start = Math.max(0, S.hlStart !== undefined ? S.hlStart : 0);
     const end = (S.hlEnd && S.hlEnd > start) ? Math.min(d, S.hlEnd) : d;
     let type = "hl-move";
-    if (e.target.classList.contains("hl-handle-l")) type = "hl-resize-l";
-    else if (e.target.classList.contains("hl-handle-r")) type = "hl-resize-r";
+    if (e.target.closest(".hl-handle-l")) type = "hl-resize-l";
+    else if (e.target.closest(".hl-handle-r")) type = "hl-resize-r";
     else hlBar.style.cursor = "grabbing";
 
     dragInfo = {
       type: type,
-      startX: e.clientX,
+      startX: getPointerClientX(e),
       initialStart: start,
       initialEnd: end,
       el: hlBar
@@ -2267,13 +2396,13 @@ document.addEventListener("mousedown", e => {
 
     isDragging = true;
     let type = "media-move";
-    if (e.target.classList.contains("media-handle-l")) type = "media-resize-l";
-    else if (e.target.classList.contains("media-handle-r")) type = "media-resize-r";
+    if (e.target.closest(".media-handle-l")) type = "media-resize-l";
+    else if (e.target.closest(".media-handle-r")) type = "media-resize-r";
     else mediaBar.style.cursor = "grabbing";
 
     dragInfo = {
       type: type,
-      startX: e.clientX,
+      startX: getPointerClientX(e),
       initialStart: m.start || 0,
       initialEnd: m.end || d,
       item: m,
@@ -2282,37 +2411,62 @@ document.addEventListener("mousedown", e => {
     e.preventDefault();
     return;
   }
-});
+}
 
-document.addEventListener("mousemove", e => {
+function onTimelinePointerMove(e) {
   if (!isDragging || !dragInfo) return;
   const pps = S.pps || 20;
   const d = S.dur || 10;
-  const dx = (e.clientX - dragInfo.startX) / pps;
+  const clientX = getPointerClientX(e);
+  const dx = (clientX - dragInfo.startX) / pps;
 
   if (dragInfo.type.startsWith("hl-")) {
+    let targetSeekTime = null;
+
     if (dragInfo.type === "hl-move") {
       const dur = dragInfo.initialEnd - dragInfo.initialStart;
       let newStart = Math.max(0, Math.min(d - dur, dragInfo.initialStart + dx));
-      S.hlStart = Math.round(newStart * 10) / 10;
+      newStart = Math.round(newStart * 10) / 10;
+      S.hlStart = newStart;
       S.hlEnd = Math.round((newStart + dur) * 10) / 10;
+      targetSeekTime = S.hlStart;
     } else if (dragInfo.type === "hl-resize-l") {
-      let newStart = Math.max(0, Math.min(dragInfo.initialEnd - 0.5, dragInfo.initialStart + dx));
-      S.hlStart = Math.round(newStart * 10) / 10;
+      let newStart = Math.max(0, Math.min(dragInfo.initialEnd - 0.3, dragInfo.initialStart + dx));
+      newStart = Math.round(newStart * 10) / 10;
+      S.hlStart = newStart;
+      targetSeekTime = S.hlStart;
     } else if (dragInfo.type === "hl-resize-r") {
-      let newEnd = Math.max(dragInfo.initialStart + 0.5, Math.min(d, dragInfo.initialEnd + dx));
-      S.hlEnd = Math.round(newEnd * 10) / 10;
+      let newEnd = Math.max(dragInfo.initialStart + 0.3, Math.min(d, dragInfo.initialEnd + dx));
+      newEnd = Math.round(newEnd * 10) / 10;
+      S.hlEnd = newEnd;
+      targetSeekTime = S.hlEnd;
     }
+
     if ($("#hlStart")) $("#hlStart").value = S.hlStart;
     if ($("#hlEnd")) $("#hlEnd").value = S.hlEnd;
+    updateHeadlineTimingDisplay();
 
     const bar = dragInfo.el;
     if (bar) {
       const start = S.hlStart || 0;
       const end = (S.hlEnd && S.hlEnd > start) ? Math.min(d, S.hlEnd) : d;
       bar.style.left = (start * pps) + "px";
-      bar.style.width = Math.max(24, (end - start) * pps) + "px";
+      bar.style.width = Math.max(28, (end - start) * pps) + "px";
+      const badge = bar.querySelector(".hl-time-badge");
+      if (badge) badge.textContent = `${start.toFixed(1)}s – ${end.toFixed(1)}s`;
     }
+
+    // Sincroniza o player no momento do corte/ajuste para preview instantâneo
+    if (targetSeekTime !== null) {
+      const pvFull = $("#pvRenderedFull");
+      if (pv && !pv.paused) pv.pause();
+      if (pv) pv.currentTime = targetSeekTime;
+      if (pvFull) pvFull.currentTime = targetSeekTime;
+      if (prevPlayer) prevPlayer.currentTime = targetSeekTime;
+      highlightActiveSegment(targetSeekTime, false);
+    }
+
+    updateHeadlineOverlay(targetSeekTime !== null ? targetSeekTime : (pv ? pv.currentTime : 0));
   } else if (dragInfo.type.startsWith("media-")) {
     const m = dragInfo.item;
     if (!m) return;
@@ -2336,12 +2490,17 @@ document.addEventListener("mousemove", e => {
       bar.style.width = Math.max(20, (m.end - m.start) * pps) + "px";
     }
   }
-});
+}
 
-document.addEventListener("mouseup", () => {
+function onTimelinePointerUp() {
   if (isDragging) {
     if (dragInfo && dragInfo.type && dragInfo.type.startsWith("media-")) {
       renderMediaLists();
+    }
+    if (dragInfo && dragInfo.type && dragInfo.type.startsWith("hl-")) {
+      drawTL();
+      const pvCam = $("#pv");
+      updateHeadlineOverlay(pvCam ? pvCam.currentTime : 0);
     }
     if (dragInfo && dragInfo.el) {
       dragInfo.el.style.cursor = "grab";
@@ -2349,7 +2508,15 @@ document.addEventListener("mouseup", () => {
     isDragging = false;
     dragInfo = null;
   }
-});
+}
+
+document.addEventListener("mousedown", onTimelinePointerDown);
+document.addEventListener("mousemove", onTimelinePointerMove);
+document.addEventListener("mouseup", onTimelinePointerUp);
+
+document.addEventListener("touchstart", onTimelinePointerDown, { passive: false });
+document.addEventListener("touchmove", onTimelinePointerMove, { passive: false });
+document.addEventListener("touchend", onTimelinePointerUp);
 
 const tlEl = $("#tl");
 if (tlEl) tlEl.onclick = tl_seek;
@@ -2422,6 +2589,7 @@ if (fitBtn) {
     if (!isRenderedView) {
       updateMediaPreviewAtTime(v.currentTime);
       updateSubtitleOverlayAtTime(v.currentTime);
+      updateHeadlineOverlay(v.currentTime);
     }
   }
   requestAnimationFrame(loop);
