@@ -17,6 +17,8 @@ output/*
 !output/.gitkeep
 tmp/*
 !tmp/.gitkeep
+fonts/*
+!fonts/.gitkeep
 
 # Arquivos de sistema
 .DS_Store

@@ -5,6 +5,7 @@ Sem chamadas de API paga: transcrição via Whisper local, tudo mais via FFmpeg/
 
 import os
 import re
+import struct
 import subprocess
 import uuid
 from pathlib import Path
@@ -32,6 +33,60 @@ for d in (UPLOAD_DIR, OUTPUT_DIR, TMP_DIR, FONTS_DIR):
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2GB
+
+
+def get_font_name(font_path):
+    """Extrai o nome da família da fonte (.ttf/.otf) sem dependências externas."""
+    try:
+        with open(font_path, "rb") as f:
+            data = f.read(65536)
+        if len(data) < 12:
+            return Path(font_path).stem
+        num_tables = struct.unpack(">H", data[4:6])[0]
+        name_offset = None
+        for i in range(num_tables):
+            offset = 12 + i * 16
+            tag = data[offset:offset+4]
+            if tag == b"name":
+                name_offset = struct.unpack(">I", data[offset+8:offset+12])[0]
+                break
+        if name_offset is None:
+            return Path(font_path).stem
+        if name_offset >= len(data):
+            with open(font_path, "rb") as f:
+                f.seek(name_offset)
+                data = f.read(16384)
+                name_offset = 0
+        if len(data) >= name_offset + 6:
+            count, string_offset = struct.unpack(">HH", data[name_offset+2:name_offset+6])
+            records_start = name_offset + 6
+            best_name = None
+            for j in range(count):
+                rec = records_start + j * 12
+                if rec + 12 > len(data):
+                    break
+                platform_id, encoding_id, lang_id, name_id, length, offset = struct.unpack(">HHHHHH", data[rec:rec+12])
+                if name_id in (1, 4):
+                    str_pos = name_offset + string_offset + offset
+                    if str_pos + length <= len(data):
+                        raw = data[str_pos:str_pos+length]
+                        try:
+                            if platform_id == 3 or (platform_id == 0 and len(raw) % 2 == 0):
+                                val = raw.decode("utf-16-be").strip()
+                            else:
+                                val = raw.decode("utf-8", errors="ignore").strip()
+                            if val:
+                                if name_id == 1:
+                                    return val
+                                if not best_name:
+                                    best_name = val
+                        except Exception:
+                            pass
+            if best_name:
+                return best_name
+    except Exception:
+        pass
+    return Path(font_path).stem
 
 _whisper_model = None
 
@@ -141,10 +196,15 @@ def build_tracking_crop_expr(points, src_w, src_h, out_ratio=1080 / 1920):
 
 CAPTION_STYLES = {
     "hormozi": dict(font="Arial Black", size=16, primary="&H0000FFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=4, upper=True),
+    "karaoke_ciano": dict(font="Arial Black", size=15, primary="&H00D2B400", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=3.5, upper=True),
     "karaoke_neon": dict(font="Arial Black", size=15, primary="&H00D2B400", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=3.5, upper=True),
     "destaque": dict(font="Arial Black", size=15, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=3, upper=True),
     "karaoke": dict(font="Arial Black", size=15, primary="&H00006AFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=3, upper=True),
     "pop_destaque": dict(font="Arial Black", size=17, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=4.5, upper=True),
+    "caixa_preta_sub": dict(font="Arial Black", size=14, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=3, outline=12, upper=True),
+    "caixa_amarela_sub": dict(font="Arial Black", size=14, primary="&H00000000", sec="&H00000000", outline_c="&H0000E6FF", bold=-1, bs=3, outline=12, upper=True),
+    "verde_limao": dict(font="Arial Black", size=15, primary="&H005EC522", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=3.5, upper=True),
+    "rubi_impacto": dict(font="Arial Black", size=15, primary="&H004444EF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=4, upper=True),
     "serif_destaque": dict(font="Georgia", size=14, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=2, upper=False),
     "serif_luxo": dict(font="Georgia", size=14, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=0, bs=1, outline=2, upper=False),
     "clean_minimal": dict(font="Arial", size=12, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=0, bs=1, outline=1.5, upper=False),
@@ -270,17 +330,49 @@ def chunk_words(words, max_words=3, max_duration=1.25):
     return chunks
 
 
+def wrap_headline_lines(text, max_chars=22, uppercase=True):
+    """Respeita quebras manuais de linha (\n) e aplica word wrap automático em linhas longas."""
+    if not text:
+        return []
+    import textwrap
+    text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    raw_lines = text.split("\n")
+    final_lines = []
+    for l in raw_lines:
+        line_clean = l.strip()
+        if not line_clean:
+            continue
+        if uppercase:
+            line_clean = line_clean.upper()
+        if len(line_clean) <= max_chars:
+            final_lines.append(line_clean)
+        else:
+            w_lines = textwrap.wrap(line_clean, width=max_chars, break_long_words=False)
+            if w_lines:
+                final_lines.extend(w_lines)
+            else:
+                final_lines.append(line_clean)
+    return final_lines
+
+
 def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False, headline=None, headline_style="bebas_impact",
                         headline_start=0.0, headline_end=None, headline_pos="topo", effective_silences=None, caption_style=None,
                         hl_color1=None, hl_color2=None, hl_outline_color=None, caption_disabled=False, hl_color_mode=None,
                         hl_bold=True, hl_italic=False, hl_underline=False, hl_uppercase=True, hl_text_color=None,
-                        hl_pos_x=0.50, hl_pos_y=None, hl_scale=1.0, sub_pos_x=0.50, sub_pos_y=0.77, sub_scale=1.0):
+                        hl_pos_x=0.50, hl_pos_y=None, hl_scale=1.0, sub_pos_x=0.50, sub_pos_y=0.77, sub_scale=1.0,
+                        hl_font=None, hl_letter_spacing=1, hl_line_spacing=1.15,
+                        sub_text_color=None, sub_highlight_color=None, sub_outline_color=None):
     if caption_style and (not style or style == "destaque"):
         style = caption_style
     c = dict(CAPTION_STYLES.get(style, CAPTION_STYLES["destaque"]))
     h = dict(HEADLINE_STYLES.get(headline_style, HEADLINE_STYLES["bebas_impact"]))
 
-    # Formatação clássica da headline (Negrito, Itálico, Sublinhado, Cores)
+    # Formatação da headline (Negrito, Itálico, Sublinhado, Cores, Fonte, Espaçamento)
+    hl_font_family = hl_font or h["font"]
+    hl_fsp = int(round(float(hl_letter_spacing if hl_letter_spacing is not None else 1)))
+    hl_lh = float(hl_line_spacing if hl_line_spacing is not None else 1.15)
+    hl_lh = max(0.6, min(2.5, hl_lh))
+
     text_color = hl_text_color or hl_color1
     if text_color:
         c_ass = hex_to_ass_color(text_color, h["primary"])
@@ -288,6 +380,18 @@ def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False
         h["sec"] = c_ass
     if hl_outline_color:
         h["outline_c"] = hex_to_ass_color(hl_outline_color, h["outline_c"])
+
+    # Customização de cores das legendas (Color Picker sem Glow)
+    if sub_text_color:
+        c_ass_base = hex_to_ass_color(sub_text_color, c["sec"])
+        c["sec"] = c_ass_base
+        if not karaoke:
+            c["primary"] = c_ass_base
+    if sub_highlight_color:
+        c_ass_high = hex_to_ass_color(sub_highlight_color, c["primary"])
+        c["primary"] = c_ass_high
+    if sub_outline_color:
+        c["outline_c"] = hex_to_ass_color(sub_outline_color, c["outline_c"])
 
     h_bold = -1 if hl_bold else 0
     h_italic = -1 if hl_italic else 0
@@ -312,7 +416,7 @@ def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False
                 f"{d['bold']},0,0,0,100,100,0,0,{d['bs']},{d['outline']},0,2,100,140,440,1")
 
     def sty_hl(name, d):
-        return (f"Style: {name},{d['font']},{d['size'] * 4},{d['primary']},{d['sec']},{d['outline_c']},&H00000000,"
+        return (f"Style: {name},{hl_font_family},{d['size'] * 4},{d['primary']},{d['sec']},{d['outline_c']},&H00000000,"
                 f"{h_bold},{h_italic},{h_underline},0,100,100,0,0,{d['bs']},{d['outline']},0,8,100,140,430,1")
 
     header = (
@@ -327,17 +431,13 @@ def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False
     def fmt_time(t):
         return f"{int(t // 3600)}:{int((t % 3600) // 60):02d}:{t % 60:05.2f}"
 
-    def tx_hl(text):
-        text = text.replace("\n", " ").strip()
-        return text.upper() if hl_uppercase else text
-
     def tx_sub(text, d):
         text = text.replace("\n", " ").strip()
         return text.upper() if d["upper"] else text
 
     lines = [header]
 
-    # Headline com intervalo de início e fim customizáveis e posição 2D do canvas
+    # Headline com intervalo de início e fim customizáveis, múltiplas linhas e espaçamento tipográfico
     if headline:
         h_start = float(headline_start or 0.0)
         h_end = float(headline_end if (headline_end is not None and float(headline_end) > 0) else 5.0)
@@ -345,7 +445,13 @@ def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False
             h_start = map_time_after_cuts(h_start, effective_silences)
             h_end = map_time_after_cuts(h_end, effective_silences)
         if h_end > h_start:
-            lines.append(f"Dialogue: 1,{fmt_time(h_start)},{fmt_time(h_end)},Headline,,0,0,0,,{{\\an5\\pos({hl_x},{hl_y})\\fs{hl_fs}\\q2}}{tx_hl(headline)}\n")
+            max_c = max(12, int(round(22 / max(0.4, hl_scale_val))))
+            hl_lines = wrap_headline_lines(headline, max_chars=max_c, uppercase=hl_uppercase)
+            n_l = len(hl_lines)
+            line_height = int(round(hl_fs * hl_lh))
+            for i, line_str in enumerate(hl_lines):
+                line_y = int(round(hl_y + (i - (n_l - 1) / 2.0) * line_height))
+                lines.append(f"Dialogue: 1,{fmt_time(h_start)},{fmt_time(h_end)},Headline,,0,0,0,,{{\\an5\\pos({hl_x},{line_y})\\fs{hl_fs}\\fsp{hl_fsp}\\fn{hl_font_family}}}{line_str}\n")
 
     # Coleta todas as palavras de todos os segmentos se legendas estiverem ativadas
     all_words = []
@@ -561,6 +667,46 @@ def upload_headline_template():
     })
 
 
+@app.route("/upload_font", methods=["POST"])
+def upload_font():
+    file = request.files.get("file") or request.files.get("font")
+    if not file or not file.filename:
+        return jsonify({"error": "Nenhum arquivo enviado"}), 400
+    ext = Path(file.filename).suffix.lower()
+    if ext not in (".ttf", ".otf"):
+        return jsonify({"error": "Formato inválido. Use arquivos .ttf ou .otf"}), 400
+    safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', Path(file.filename).name)
+    save_path = FONTS_DIR / safe_name
+    file.save(save_path)
+    font_family = get_font_name(save_path)
+    return jsonify({
+        "status": "ok",
+        "name": font_family,
+        "filename": safe_name,
+        "url": f"/fonts/{safe_name}"
+    })
+
+
+@app.route("/fonts", methods=["GET"])
+def list_fonts():
+    results = []
+    if FONTS_DIR.exists():
+        for f in sorted(FONTS_DIR.iterdir()):
+            if f.suffix.lower() in (".ttf", ".otf"):
+                name = get_font_name(f)
+                results.append({
+                    "name": name,
+                    "filename": f.name,
+                    "url": f"/fonts/{f.name}"
+                })
+    return jsonify({"fonts": results})
+
+
+@app.route("/fonts/<path:filename>")
+def serve_font(filename):
+    return send_from_directory(FONTS_DIR, filename)
+
+
 @app.route("/export", methods=["POST"])
 def export():
     data = request.json
@@ -591,6 +737,12 @@ def export():
     hl_uppercase = bool(data.get("hl_uppercase", True))
     hl_text_color = data.get("hl_text_color") or data.get("hl_color1") or "#ffffff"
     hl_outline_color = data.get("hl_outline_color") or "#000000"
+    hl_font = data.get("hl_font", "Impact")
+    hl_letter_spacing = float(data.get("hl_letter_spacing", 1.0) if data.get("hl_letter_spacing") is not None else 1.0)
+    hl_line_spacing = float(data.get("hl_line_spacing", 1.15) if data.get("hl_line_spacing") is not None else 1.15)
+    sub_text_color = data.get("sub_text_color")
+    sub_highlight_color = data.get("sub_highlight_color")
+    sub_outline_color = data.get("sub_outline_color")
     karaoke = bool(data.get("karaoke")) or ("karaoke" in caption_style) or (caption_style in ("hormozi", "karaoke_neon"))
     zoom_continuous = bool(data.get("zoom_continuous"))
     zoom_cuts = bool(data.get("zoom_cuts"))
@@ -920,7 +1072,13 @@ def export():
                 hl_scale=hl_scale,
                 sub_pos_x=sub_pos_x,
                 sub_pos_y=sub_pos_y,
-                sub_scale=sub_scale
+                sub_scale=sub_scale,
+                hl_font=hl_font,
+                hl_letter_spacing=hl_letter_spacing,
+                hl_line_spacing=hl_line_spacing,
+                sub_text_color=sub_text_color,
+                sub_highlight_color=sub_highlight_color,
+                sub_outline_color=sub_outline_color
             )
             captioned = job_tmp / "captioned.mp4"
             vf_ass = f"ass={ass_path.as_posix()}:fontsdir={FONTS_DIR.as_posix()}" if FONTS_DIR.exists() else f"ass={ass_path.as_posix()}"

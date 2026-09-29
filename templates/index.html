@@ -121,9 +121,38 @@
       <!-- PAINEL 1: TEXTO NATIVO DA HEADLINE -->
       <div id="hlTextModePanel">
         <div class="opts-grid headlines-grid" id="hlC"></div>
-        <input type="text" id="hlText" class="hl-input" placeholder="Texto da headline (ex: ASSISTA ATÉ O FINAL)">
+        <textarea id="hlText" class="hl-input hl-textarea" rows="2" placeholder="Texto da headline (pressione Enter para quebrar linha ou digite livremente)..."></textarea>
         
-        <!-- Formatação Clássica da Headline (Negrito, Itálico, Sublinhado, Caixa Alta, Cores) -->
+        <!-- Controles de Fonte e Upload de Fontes Customizadas -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px;">
+            <label for="hlFontFamily" style="font-size:11.5px;color:#cbd5e1;font-weight:700;">Fonte:</label>
+            <select id="hlFontFamily" class="ib font-family-select" style="flex:1;font-size:11.5px;padding:4px 8px;height:30px;background:#12161f;border:1px solid #1f2533;color:#fff;border-radius:6px;">
+              <optgroup label="Fontes Nativas">
+                <option value="Impact" selected>Impact (Padrão Viral)</option>
+                <option value="Montserrat">Montserrat</option>
+                <option value="Anton">Anton</option>
+                <option value="Bebas Neue">Bebas Neue</option>
+                <option value="Arial">Arial</option>
+                <option value="Arial Black">Arial Black</option>
+                <option value="Helvetica">Helvetica</option>
+                <option value="Roboto">Roboto</option>
+                <option value="Oswald">Oswald</option>
+                <option value="Poppins">Poppins</option>
+                <option value="Trebuchet MS">Trebuchet MS</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Times New Roman">Times New Roman</option>
+              </optgroup>
+              <optgroup id="customFontsOptGroup" label="Fontes Customizadas (Upload)" style="display:none;"></optgroup>
+            </select>
+          </div>
+          <button type="button" class="btn btn-secondary" id="btnUploadFont" style="font-size:11px;padding:5px 12px;display:flex;align-items:center;gap:5px;height:30px;">
+            <span>⬆️</span> Subir Fonte (.ttf / .otf)
+          </button>
+          <input type="file" id="fontFileInput" accept=".ttf,.otf" style="display:none;">
+        </div>
+
+        <!-- Formatação Clássica da Headline (Negrito, Itálico, Sublinhado, Caixa Alta, Cores, Espaçamentos) -->
         <div class="card" style="margin-top:10px;background:#0d1016;border:1px solid #1f2533;border-radius:10px;padding:12px 14px;">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
             <!-- Barra de ferramentas clássica: Bold, Italic, Underline, Uppercase -->
@@ -147,6 +176,31 @@
                 <label for="hlOutlineColor" style="font-size:11.5px;color:#cbd5e1;font-weight:600;">Borda:</label>
                 <input type="color" id="hlOutlineColor" value="#000000" style="width:32px;height:26px;border:none;border-radius:4px;cursor:pointer;background:transparent;">
               </div>
+            </div>
+          </div>
+
+          <!-- Controles de Espaçamento Tipográfico: Letter Spacing & Line Spacing (Sliders + Inputs Numéricos) -->
+          <div class="typo-spacing-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:14px;margin-top:12px;padding-top:12px;border-top:1px solid #1a2230;">
+            <!-- Letter Spacing (Espaçamento horizontal entre as letras) -->
+            <div style="background:#12161f;padding:8px 12px;border-radius:8px;border:1px solid #1f2533;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="font-size:11px;color:#cbd5e1;font-weight:600;display:flex;align-items:center;gap:4px;">
+                  <span>↔️</span> Espaçamento de Letras (px):
+                </span>
+                <input type="number" id="hlLetterSpacingNum" min="-5" max="25" step="1" value="1" style="width:48px;padding:2px 4px;font-size:11.5px;background:#0d1016;border:1px solid #2d3748;color:#eab308;font-weight:700;border-radius:4px;text-align:center;">
+              </div>
+              <input type="range" id="hlLetterSpacingRange" min="-5" max="25" step="1" value="1" style="width:100%;accent-color:#eab308;cursor:pointer;height:5px;">
+            </div>
+
+            <!-- Line Spacing (Entrelinha / Altura de linha vertical) -->
+            <div style="background:#12161f;padding:8px 12px;border-radius:8px;border:1px solid #1f2533;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="font-size:11px;color:#cbd5e1;font-weight:600;display:flex;align-items:center;gap:4px;">
+                  <span>↕️</span> Entrelinha (Line Spacing):
+                </span>
+                <input type="number" id="hlLineSpacingNum" min="0.8" max="2.5" step="0.05" value="1.15" style="width:54px;padding:2px 4px;font-size:11.5px;background:#0d1016;border:1px solid #2d3748;color:#eab308;font-weight:700;border-radius:4px;text-align:center;">
+              </div>
+              <input type="range" id="hlLineSpacingRange" min="0.8" max="2.5" step="0.05" value="1.15" style="width:100%;accent-color:#eab308;cursor:pointer;height:5px;">
             </div>
           </div>
         </div>
@@ -216,6 +270,31 @@
         </div>
       </div>
       <div class="opts-grid captions-grid" id="capC"></div>
+
+      <!-- Customização Avançada de Cores das Legendas (Sem Glow / Alto Contraste) -->
+      <div class="card" style="margin-top:10px;background:#0d1016;border:1px solid #1f2533;border-radius:10px;padding:12px 14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <div>
+            <b style="font-size:11.5px;color:#14b8a6;text-transform:uppercase;letter-spacing:0.5px;">Cores das Legendas (Sem Glow / Alto Contraste)</b>
+            <small style="color:#6b7280;font-size:10.5px;display:block;margin-top:2px;">Personalize as cores das palavras ativas e texto base com contornos nítidos.</small>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:5px;">
+              <label for="subTextColor" style="font-size:11px;color:#cbd5e1;font-weight:600;">Texto:</label>
+              <input type="color" id="subTextColor" value="#ffffff" style="width:30px;height:24px;border:none;border-radius:4px;cursor:pointer;background:transparent;">
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;">
+              <label for="subHighlightColor" style="font-size:11px;color:#cbd5e1;font-weight:600;">Destaque:</label>
+              <input type="color" id="subHighlightColor" value="#ffe600" style="width:30px;height:24px;border:none;border-radius:4px;cursor:pointer;background:transparent;">
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;">
+              <label for="subOutlineColor" style="font-size:11px;color:#cbd5e1;font-weight:600;">Borda:</label>
+              <input type="color" id="subOutlineColor" value="#000000" style="width:30px;height:24px;border:none;border-radius:4px;cursor:pointer;background:transparent;">
+            </div>
+            <button type="button" class="btn btn-secondary" id="btnResetSubColors" style="font-size:10.5px;padding:3px 8px;" title="Restaurar cores originais do estilo selecionado">↺ Restaurar</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="sec-group">
@@ -292,17 +371,52 @@
 
               <!-- MODO TEXTO NA ABA VISUAL -->
               <div id="visualHlTextPanel" style="padding-top:2px;">
-                <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
-                  <input type="text" id="visualHlText" class="hl-input" placeholder="Texto da headline..." style="margin:0;padding:4px 8px;font-size:11px;height:24px;flex:1;">
-                  <select id="visualHlStyleSelect" class="ib" style="font-size:10px;padding:2px 6px;height:24px;max-width:125px;">
-                    <option value="bebas_impact">Impact / Viral</option>
-                    <option value="neon_cyber">Cyber Neon</option>
-                    <option value="contorno">Contorno Branco</option>
-                    <option value="caixa_preta">Caixa Preta</option>
-                    <option value="caixa_laranja">Caixa Laranja</option>
-                    <option value="laranja_texto">Texto Laranja</option>
-                  </select>
+                <div style="display:flex;gap:6px;align-items:stretch;margin-bottom:4px;">
+                  <textarea id="visualHlText" class="hl-input hl-textarea" rows="2" placeholder="Texto da headline..." style="margin:0;padding:4px 8px;font-size:11px;min-height:36px;height:38px;resize:vertical;flex:1;"></textarea>
+                  <div style="display:flex;flex-direction:column;gap:3px;max-width:125px;">
+                    <select id="visualHlStyleSelect" class="ib" style="font-size:10px;padding:2px 4px;height:18px;max-width:125px;">
+                      <option value="bebas_impact">Impact / Viral</option>
+                      <option value="neon_cyber">Cyber Ciano</option>
+                      <option value="contorno">Contorno Branco</option>
+                      <option value="caixa_preta">Caixa Preta</option>
+                      <option value="caixa_laranja">Caixa Laranja</option>
+                      <option value="laranja_texto">Texto Laranja</option>
+                    </select>
+                    <select id="visualHlFontFamily" class="ib font-family-select" style="font-size:9.5px;padding:1px 4px;height:18px;max-width:125px;">
+                      <optgroup label="Fontes Nativas">
+                        <option value="Impact" selected>Impact</option>
+                        <option value="Montserrat">Montserrat</option>
+                        <option value="Anton">Anton</option>
+                        <option value="Bebas Neue">Bebas Neue</option>
+                        <option value="Arial">Arial</option>
+                        <option value="Arial Black">Arial Black</option>
+                        <option value="Helvetica">Helvetica</option>
+                        <option value="Roboto">Roboto</option>
+                        <option value="Oswald">Oswald</option>
+                        <option value="Poppins">Poppins</option>
+                        <option value="Trebuchet MS">Trebuchet MS</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Times New Roman">Times New Roman</option>
+                      </optgroup>
+                      <optgroup id="visualCustomFontsOptGroup" label="Customizadas" style="display:none;"></optgroup>
+                    </select>
+                  </div>
                 </div>
+
+                <!-- Sliders Compactos de Espaçamento Tipográfico na Aba Visual -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:3px 0 4px 0;background:#0d1016;border-radius:4px;padding:3px 6px;border:1px solid #1a2230;">
+                  <div style="display:flex;align-items:center;gap:3px;">
+                    <span style="font-size:9px;color:#94a3b8;" title="Espaçamento de letras (px)">↔️:</span>
+                    <input type="range" id="visualHlLetterSpacingRange" min="-5" max="25" step="1" value="1" style="flex:1;accent-color:#eab308;height:3px;">
+                    <span id="visualHlLetterSpacingVal" style="font-size:9px;color:#eab308;font-weight:700;min-width:14px;text-align:right;">1</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:3px;">
+                    <span style="font-size:9px;color:#94a3b8;" title="Entrelinha / Altura de linha">↕️:</span>
+                    <input type="range" id="visualHlLineSpacingRange" min="0.8" max="2.5" step="0.05" value="1.15" style="flex:1;accent-color:#eab308;height:3px;">
+                    <span id="visualHlLineSpacingVal" style="font-size:9px;color:#eab308;font-weight:700;min-width:22px;text-align:right;">1.15</span>
+                  </div>
+                </div>
+
                 <!-- Formatação clássica da headline na aba Visual (Linha única compacta) -->
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
                   <div style="display:flex;gap:2px;">
@@ -383,15 +497,36 @@
               </div>
               <select id="visualCapStyleSelect" class="ib" style="width:100%;font-size:11px;padding:3px 8px;margin:2px 0 5px 0;height:25px;">
                 <option value="hormozi">Hormozi Viral</option>
-                <option value="karaoke_neon">Karaokê Neon</option>
-                <option value="pop_destaque">Pop Destaque</option>
-                <option value="destaque">Destaque Branco</option>
+                <option value="karaoke_ciano">Karaokê Ciano</option>
                 <option value="karaoke">Karaokê Laranja</option>
+                <option value="verde_limao">Verde Limão</option>
+                <option value="rubi_impacto">Rubi Impacto</option>
+                <option value="caixa_preta_sub">Caixa Preta</option>
+                <option value="caixa_amarela_sub">Caixa Amarela</option>
+                <option value="destaque">Destaque Branco</option>
+                <option value="pop_destaque">Pop Destaque</option>
                 <option value="serif_luxo">Serifada Luxo</option>
                 <option value="clean_minimal">Clean Minimal</option>
                 <option value="pequena">Pequena Discreta</option>
                 <option value="nenhuma">🚫 Sem Legenda (Vídeo Limpo)</option>
               </select>
+
+              <!-- Cores Rápidas da Legenda na Aba Visual -->
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:5px;background:#0d1016;border-radius:6px;padding:3px 6px;border:1px solid #1a2230;">
+                <div style="display:flex;align-items:center;gap:3px;">
+                  <label for="visualSubTextColor" style="font-size:9.5px;color:#94a3b8;">Texto:</label>
+                  <input type="color" id="visualSubTextColor" value="#ffffff" style="width:18px;height:18px;border:none;border-radius:3px;cursor:pointer;background:transparent;padding:0;" title="Cor do Texto Base">
+                </div>
+                <div style="display:flex;align-items:center;gap:3px;">
+                  <label for="visualSubHighlightColor" style="font-size:9.5px;color:#94a3b8;">Destaque:</label>
+                  <input type="color" id="visualSubHighlightColor" value="#ffe600" style="width:18px;height:18px;border:none;border-radius:3px;cursor:pointer;background:transparent;padding:0;" title="Cor da Palavra Ativa (Karaokê)">
+                </div>
+                <div style="display:flex;align-items:center;gap:3px;">
+                  <label for="visualSubOutlineColor" style="font-size:9.5px;color:#94a3b8;">Borda:</label>
+                  <input type="color" id="visualSubOutlineColor" value="#000000" style="width:18px;height:18px;border:none;border-radius:3px;cursor:pointer;background:transparent;padding:0;" title="Cor da Borda / Contorno">
+                </div>
+              </div>
+            </div>
             </div>
 
             <!-- CONTROLE DEDICADO DE TAMANHO DA LEGENDA -->

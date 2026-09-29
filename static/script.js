@@ -19,6 +19,9 @@ const S = {
   subPosX: 50, subPosY: 77.0, subScale: 1.0,
   hlBold: true, hlItalic: false, hlUnderline: false, hlUppercase: true,
   hlTextColor: "#ffffff", hlOutlineColor: "#000000",
+  hlFont: "Impact", hlLetterSpacing: 1, hlLineSpacing: 1.15,
+  subTextColor: "#ffffff", subHighlightColor: "#ffe600", subOutlineColor: "#000000",
+  customFonts: [],
   hlColor1: "#ffffff", hlColor2: "#ff6a00",
   hlTemplate: null, captionDisabled: false, lastCap: "hormozi",
   safeZoneVisible: false,
@@ -38,20 +41,24 @@ const TIPOS = [
 
 const HL_TXT = "É ASSIM QUE VAI FICAR A HEADLINE";
 const HLS = [
-  ["bebas_impact", "Impact / Viral", `font-family:Impact,sans-serif;font-size:14px;color:#fff;letter-spacing:1px;text-transform:uppercase;text-shadow:0 0 3px #000`],
-  ["neon_cyber", "Arial Black (Ciano)", `font-family:'Arial Black',sans-serif;font-weight:900;font-size:12px;color:#00d2b4;text-shadow:0 0 3px #000`],
-  ["contorno", "Contorno Branco", `font-family:'Arial Black',sans-serif;font-weight:900;font-size:12px;color:#fff;text-shadow:0 0 3px #000,0 0 5px #000`],
+  ["bebas_impact", "Impact / Viral", `font-family:Impact,sans-serif;font-size:14px;color:#fff;letter-spacing:1px;text-transform:uppercase;-webkit-text-stroke:0.8px #000;text-shadow:1px 1px 0 #000`],
+  ["neon_cyber", "Cyber Ciano", `font-family:'Arial Black',sans-serif;font-weight:900;font-size:12px;color:#00d2b4;-webkit-text-stroke:0.8px #000;text-shadow:1px 1px 0 #000`],
+  ["contorno", "Contorno Branco", `font-family:'Arial Black',sans-serif;font-weight:900;font-size:12px;color:#fff;-webkit-text-stroke:1.2px #000;text-shadow:1px 1px 0 #000`],
   ["caixa_preta", "Caixa Preta", `background:#000;color:#fff;font-weight:800;font-size:10px;padding:3px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:0.5px`],
   ["caixa_laranja", "Caixa Laranja", `background:#ff6a00;color:#fff;font-weight:800;font-size:11px;padding:3px 6px;border-radius:3px;text-transform:uppercase`],
-  ["laranja_texto", "Texto Laranja", `font-family:'Arial Black',sans-serif;font-weight:900;font-size:12px;color:#ff6a00;text-shadow:0 0 3px #000`],
+  ["laranja_texto", "Texto Laranja", `font-family:'Arial Black',sans-serif;font-weight:900;font-size:12px;color:#ff6a00;-webkit-text-stroke:0.8px #000;text-shadow:1px 1px 0 #000`],
 ];
 
 const CAPS = [
   ["hormozi", "Hormozi Viral", `<div class="anim-hormozi"><span>VIRAL</span><span>ESTILO</span><span>HORMOZI</span></div>`],
-  ["karaoke_neon", "Karaokê Neon", `<div class="anim-karaoke-neon"><span>É</span><span>ASSIM</span><span>QUE</span><span>FICA</span></div>`],
-  ["pop_destaque", "Pop Destaque", `<div class="anim-pop"><span>PALAVRA</span><span>POR</span><span>PALAVRA</span></div>`],
-  ["destaque", "Destaque Branco", `<div class="anim-pulse">APARECER</div>`],
+  ["karaoke_ciano", "Karaokê Ciano", `<div class="anim-karaoke-neon"><span>É</span><span>ASSIM</span><span>QUE</span><span>FICA</span></div>`],
   ["karaoke", "Karaokê Laranja", `<div class="anim-karaoke-orange"><span>É</span><span>ASSIM</span><span>QUE</span></div>`],
+  ["verde_limao", "Verde Limão", `<div style="font-family:'Arial Black',Impact,sans-serif;font-weight:900;font-size:11.5px;color:#00ff66;-webkit-text-stroke:0.8px #000;text-transform:uppercase;">VIRAL VERDE</div>`],
+  ["rubi_impacto", "Rubi Impacto", `<div style="font-family:Impact,sans-serif;font-weight:900;font-size:12px;color:#ff2a55;-webkit-text-stroke:0.8px #000;text-transform:uppercase;">RUBI IMPACTO</div>`],
+  ["caixa_preta_sub", "Caixa Preta", `<div style="background:#000;color:#fff;font-weight:900;font-size:10px;padding:3px 7px;border-radius:3px;text-transform:uppercase;">CAIXA PRETA</div>`],
+  ["caixa_amarela_sub", "Caixa Amarela", `<div style="background:#ffe600;color:#000;font-weight:900;font-size:10px;padding:3px 7px;border-radius:3px;text-transform:uppercase;">CAIXA AMARELA</div>`],
+  ["destaque", "Destaque Branco", `<div class="anim-pulse">APARECER</div>`],
+  ["pop_destaque", "Pop Destaque", `<div class="anim-pop"><span>PALAVRA</span><span>POR</span><span>PALAVRA</span></div>`],
   ["serif_luxo", "Serifada Luxo", `<div class="anim-shimmer" style="font-family:Georgia,serif;font-style:italic;font-size:11px;color:#fff">Elegância e Autoridade</div>`],
   ["clean_minimal", "Clean Minimal", `<div style="font-family:Arial,sans-serif;font-size:11px;color:#fff;letter-spacing:0.3px">Simplicidade direta</div>`],
   ["pequena", "Pequena Discreta", `<div style="font-family:Arial,sans-serif;font-size:9.5px;color:#94a3b8;font-weight:600">Discreta na base</div>`],
@@ -179,6 +186,30 @@ function drawOptions() {
   // Sincroniza pickers de cores da headline (sem glow e sem gradiente)
   ["hlTextColor", "visualHlTextColor", "hlColor1", "visualHlColor1"].forEach(id => { const el = $("#" + id); if (el) el.value = S.hlTextColor || "#ffffff"; });
   ["hlOutlineColor", "visualHlOutlineColor"].forEach(id => { const el = $("#" + id); if (el) el.value = S.hlOutlineColor || "#000000"; });
+
+  // Sincroniza família da fonte
+  ["hlFontFamily", "visualHlFontFamily"].forEach(id => { const el = $("#" + id); if (el && S.hlFont) el.value = S.hlFont; });
+
+  // Sincroniza espaçamento de letras
+  const lsNum = S.hlLetterSpacing !== undefined ? S.hlLetterSpacing : 1;
+  const hlLsR = $("#hlLetterSpacingRange"), hlLsN = $("#hlLetterSpacingNum"), visHlLsR = $("#visualHlLetterSpacingRange"), visHlLsV = $("#visualHlLetterSpacingVal");
+  if (hlLsR && document.activeElement !== hlLsR) hlLsR.value = lsNum;
+  if (hlLsN && document.activeElement !== hlLsN) hlLsN.value = lsNum;
+  if (visHlLsR && document.activeElement !== visHlLsR) visHlLsR.value = lsNum;
+  if (visHlLsV) visHlLsV.textContent = lsNum;
+
+  // Sincroniza entrelinha (line spacing)
+  const lhNum = S.hlLineSpacing !== undefined ? S.hlLineSpacing : 1.15;
+  const hlLhR = $("#hlLineSpacingRange"), hlLhN = $("#hlLineSpacingNum"), visHlLhR = $("#visualHlLineSpacingRange"), visHlLhV = $("#visualHlLineSpacingVal");
+  if (hlLhR && document.activeElement !== hlLhR) hlLhR.value = lhNum;
+  if (hlLhN && document.activeElement !== hlLhN) hlLhN.value = lhNum;
+  if (visHlLhR && document.activeElement !== visHlLhR) visHlLhR.value = lhNum;
+  if (visHlLhV) visHlLhV.textContent = Number(lhNum).toFixed(2);
+
+  // Sincroniza cores das legendas (Sem Glow)
+  ["subTextColor", "visualSubTextColor"].forEach(id => { const el = $("#" + id); if (el && S.subTextColor) el.value = S.subTextColor; });
+  ["subHighlightColor", "visualSubHighlightColor"].forEach(id => { const el = $("#" + id); if (el && S.subHighlightColor) el.value = S.subHighlightColor; });
+  ["subOutlineColor", "visualSubOutlineColor"].forEach(id => { const el = $("#" + id); if (el && S.subOutlineColor) el.value = S.subOutlineColor; });
 
   // 4. ELEMENTOS DA EDIÇÃO
   $("#elC").innerHTML = ELS.map(([id, nome, ico]) => {
@@ -828,6 +859,12 @@ async function executeRender(isQuickUpdate = false) {
       hl_text_color: S.hlTextColor || "#ffffff",
       hl_outline_color: S.hlOutlineColor || "#000000",
       hl_color1: S.hlTextColor || "#ffffff",
+      hl_font: S.hlFont || "Impact",
+      hl_letter_spacing: S.hlLetterSpacing !== undefined ? S.hlLetterSpacing : 1,
+      hl_line_spacing: S.hlLineSpacing !== undefined ? S.hlLineSpacing : 1.15,
+      sub_text_color: S.subTextColor || "#ffffff",
+      sub_highlight_color: S.subHighlightColor || "#ffe600",
+      sub_outline_color: S.subOutlineColor || "#000000",
       sub_pos_x: (S.subPosX !== undefined ? S.subPosX : 50) / 100.0,
       sub_pos_y: (S.subPosY !== undefined ? S.subPosY : 77.0) / 100.0,
       sub_scale: S.subScale || 1.0,
@@ -1706,12 +1743,21 @@ function updateHeadlineOverlay(curTime) {
 
       textSpan.style.setProperty("--hl-text-color", textColor);
       textSpan.style.setProperty("--hl-out-color", outColor);
+      textSpan.style.setProperty("--hl-letter-spacing", (S.hlLetterSpacing !== undefined ? S.hlLetterSpacing : 1) + "px");
+      textSpan.style.setProperty("--hl-line-spacing", (S.hlLineSpacing !== undefined ? S.hlLineSpacing : 1.15));
 
       textSpan.style.color = isPlaceholder ? "rgba(255, 255, 255, 0.8)" : textColor;
       textSpan.style.fontWeight = S.hlBold ? "900" : "400";
       textSpan.style.fontStyle = S.hlItalic ? "italic" : "normal";
       textSpan.style.textDecoration = S.hlUnderline ? "underline" : "none";
       textSpan.style.textTransform = S.hlUppercase ? "uppercase" : "none";
+      textSpan.style.fontFamily = S.hlFont ? `"${S.hlFont}", Impact, 'Arial Black', sans-serif` : "Impact, 'Arial Black', sans-serif";
+      textSpan.style.letterSpacing = (S.hlLetterSpacing !== undefined ? S.hlLetterSpacing : 1) + "px";
+      textSpan.style.lineHeight = (S.hlLineSpacing !== undefined ? S.hlLineSpacing : 1.15);
+      textSpan.style.whiteSpace = "pre-wrap";
+      textSpan.style.wordBreak = "break-word";
+      textSpan.style.maxWidth = "90cqw";
+      textSpan.style.textAlign = "center";
 
       if (hlBox) {
         if (isPlaceholder) {
@@ -1817,6 +1863,11 @@ function updateSubtitleOverlayAtTime(curTime) {
   // Escala sempre vinculada rigorosamente a S.subScale (NUNCA alterada ao arrastar)
   overlay.style.transform = `translate(-50%, -50%) scale(${S.subScale || 1.0})`;
 
+  // Variáveis de cores customizadas da legenda (Sem Glow)
+  if (S.subTextColor) overlay.style.setProperty("--sub-text-color", S.subTextColor);
+  if (S.subHighlightColor) overlay.style.setProperty("--sub-highlight-color", S.subHighlightColor);
+  if (S.subOutlineColor) overlay.style.setProperty("--sub-outline-color", S.subOutlineColor);
+
   const curPct = Math.round((S.subScale || 1.0) * 100);
   const visualRange = $("#visualSubScaleRange");
   if (visualRange && document.activeElement !== visualRange && +visualRange.value !== curPct) {
@@ -1835,13 +1886,15 @@ function updateSubtitleOverlayAtTime(curTime) {
   contentEl.className = "sub-preview-content sub-style-" + capStyle;
 
   const chunks = getSubtitleChunks();
+  const isKaraokeStyle = ["hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub"].includes(capStyle);
+  const isUpper = ["hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "destaque", "pop_destaque", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub"].includes(capStyle);
 
   // Se não há legendas transcritas ainda, exibe placeholder limpo de 3 palavras
   if (!chunks || chunks.length === 0) {
-    if (capStyle === "hormozi" || capStyle === "karaoke" || capStyle === "karaoke_neon") {
+    if (isKaraokeStyle) {
       contentEl.innerHTML = `<b>SUA</b> LEGENDA AQUI`;
     } else {
-      contentEl.textContent = (capStyle === "destaque" || capStyle === "pop_destaque") ? "SUA LEGENDA AQUI" : "Sua Legenda Aqui";
+      contentEl.textContent = isUpper ? "SUA LEGENDA AQUI" : "Sua Legenda Aqui";
     }
     return;
   }
@@ -1862,10 +1915,8 @@ function updateSubtitleOverlayAtTime(curTime) {
     return;
   }
 
-  const isUpper = (capStyle === "hormozi" || capStyle === "karaoke" || capStyle === "karaoke_neon" || capStyle === "destaque" || capStyle === "pop_destaque");
-
   // Formatação com base no estilo
-  if (capStyle === "hormozi" || capStyle === "karaoke" || capStyle === "karaoke_neon") {
+  if (isKaraokeStyle) {
     let activeIdx = -1;
     if (isExactTime) {
       activeIdx = activeChunk.words.findIndex(w => curTime >= w.start && curTime <= w.end);
@@ -2032,6 +2083,216 @@ if (hlOutlineColorInp) hlOutlineColorInp.oninput = e => syncHeadlineColor(null, 
 
 const visualHlOutlineColorInp = $("#visualHlOutlineColor");
 if (visualHlOutlineColorInp) visualHlOutlineColorInp.oninput = e => syncHeadlineColor(null, e.target.value);
+
+// ========================================================
+// GERENCIAMENTO DE TIPOGRAFIA DA HEADLINE (FONTE & ESPAÇAMENTOS)
+// ========================================================
+function syncHeadlineFont(fontName) {
+  if (!fontName) return;
+  S.hlFont = fontName;
+  ["hlFontFamily", "visualHlFontFamily"].forEach(id => {
+    const el = $("#" + id);
+    if (el && el.value !== fontName) el.value = fontName;
+  });
+  updateHeadlineOverlay();
+}
+
+const hlFontSel = $("#hlFontFamily");
+if (hlFontSel) hlFontSel.onchange = e => syncHeadlineFont(e.target.value);
+
+const visualHlFontSel = $("#visualHlFontFamily");
+if (visualHlFontSel) visualHlFontSel.onchange = e => syncHeadlineFont(e.target.value);
+
+function syncHeadlineLetterSpacing(val) {
+  const num = parseInt(val, 10);
+  if (isNaN(num)) return;
+  S.hlLetterSpacing = num;
+  const r1 = $("#hlLetterSpacingRange"), n1 = $("#hlLetterSpacingNum");
+  const r2 = $("#visualHlLetterSpacingRange"), v2 = $("#visualHlLetterSpacingVal");
+  if (r1 && +r1.value !== num) r1.value = num;
+  if (n1 && +n1.value !== num) n1.value = num;
+  if (r2 && +r2.value !== num) r2.value = num;
+  if (v2) v2.textContent = num;
+  updateHeadlineOverlay();
+}
+
+const hlLsRange = $("#hlLetterSpacingRange"), hlLsNum = $("#hlLetterSpacingNum");
+if (hlLsRange) hlLsRange.oninput = e => syncHeadlineLetterSpacing(e.target.value);
+if (hlLsNum) hlLsNum.oninput = e => syncHeadlineLetterSpacing(e.target.value);
+
+const visHlLsRange = $("#visualHlLetterSpacingRange");
+if (visHlLsRange) visHlLsRange.oninput = e => syncHeadlineLetterSpacing(e.target.value);
+
+function syncHeadlineLineSpacing(val) {
+  const num = parseFloat(val);
+  if (isNaN(num)) return;
+  const rounded = Math.round(num * 100) / 100;
+  S.hlLineSpacing = rounded;
+  const r1 = $("#hlLineSpacingRange"), n1 = $("#hlLineSpacingNum");
+  const r2 = $("#visualHlLineSpacingRange"), v2 = $("#visualHlLineSpacingVal");
+  if (r1 && +r1.value !== rounded) r1.value = rounded;
+  if (n1 && +n1.value !== rounded) n1.value = rounded;
+  if (r2 && +r2.value !== rounded) r2.value = rounded;
+  if (v2) v2.textContent = rounded.toFixed(2);
+  updateHeadlineOverlay();
+}
+
+const hlLhRange = $("#hlLineSpacingRange"), hlLhNum = $("#hlLineSpacingNum");
+if (hlLhRange) hlLhRange.oninput = e => syncHeadlineLineSpacing(e.target.value);
+if (hlLhNum) hlLhNum.oninput = e => syncHeadlineLineSpacing(e.target.value);
+
+const visHlLhRange = $("#visualHlLineSpacingRange");
+if (visHlLhRange) visHlLhRange.oninput = e => syncHeadlineLineSpacing(e.target.value);
+
+// ========================================================
+// SISTEMA DE UPLOAD E CARREGAMENTO DE FONTES LOCAIS (.TTF / .OTF)
+// ========================================================
+function registerFontFace(fontName, fontUrl) {
+  const safeId = "font-face-" + fontName.replace(/[^a-zA-Z0-9]/g, "-");
+  if (!document.getElementById(safeId)) {
+    const st = document.createElement("style");
+    st.id = safeId;
+    st.textContent = `@font-face { font-family: "${fontName}"; src: url("${fontUrl}"); font-display: swap; }`;
+    document.head.appendChild(st);
+  }
+}
+
+function updateFontDropdowns() {
+  const g1 = $("#customFontsOptGroup");
+  const g2 = $("#visualCustomFontsOptGroup");
+  if (!S.customFonts || S.customFonts.length === 0) {
+    if (g1) g1.style.display = "none";
+    if (g2) g2.style.display = "none";
+    return;
+  }
+  const optsHtml = S.customFonts.map(f => `<option value="${f.name}">${f.name}</option>`).join("");
+  if (g1) {
+    g1.innerHTML = optsHtml;
+    g1.style.display = "block";
+  }
+  if (g2) {
+    g2.innerHTML = optsHtml;
+    g2.style.display = "block";
+  }
+  ["hlFontFamily", "visualHlFontFamily"].forEach(id => {
+    const el = $("#" + id);
+    if (el && S.hlFont) el.value = S.hlFont;
+  });
+}
+
+async function loadCustomFonts() {
+  try {
+    const r = await fetch("/fonts");
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data && data.fonts) {
+      S.customFonts = data.fonts;
+      data.fonts.forEach(f => registerFontFace(f.name, f.url));
+      updateFontDropdowns();
+    }
+  } catch (err) {
+    console.warn("Não foi possível carregar fontes customizadas:", err);
+  }
+}
+
+async function handleFontUpload(file) {
+  if (!file) return;
+  const ext = file.name.split(".").pop().toLowerCase();
+  if (ext !== "ttf" && ext !== "otf") {
+    alert("Por favor selecione um arquivo de fonte válido (.ttf ou .otf).");
+    return;
+  }
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await fetch("/upload_font", { method: "POST", body: fd });
+    const data = await r.json();
+    if (!r.ok || data.error) {
+      alert("Erro ao subir fonte: " + (data.error || "Formato inválido"));
+      return;
+    }
+    registerFontFace(data.name, data.url);
+    if (!S.customFonts.find(f => f.name === data.name)) {
+      S.customFonts.push(data);
+    }
+    updateFontDropdowns();
+    syncHeadlineFont(data.name);
+  } catch (err) {
+    alert("Falha no upload da fonte: " + err.message);
+  }
+}
+
+const btnUploadFont = $("#btnUploadFont");
+const fontFileInput = $("#fontFileInput");
+if (btnUploadFont && fontFileInput) {
+  btnUploadFont.onclick = () => fontFileInput.click();
+  fontFileInput.onchange = e => {
+    if (e.target.files && e.target.files[0]) {
+      handleFontUpload(e.target.files[0]);
+    }
+  };
+}
+
+// ========================================================
+// PERSONALIZAÇÃO DE CORES DAS LEGENDAS (SEM GLOW / ALTO CONTRASTE)
+// ========================================================
+function syncSubtitleColors(textC, highC, outC) {
+  if (textC) S.subTextColor = textC;
+  if (highC) S.subHighlightColor = highC;
+  if (outC) S.subOutlineColor = outC;
+
+  ["subTextColor", "visualSubTextColor"].forEach(id => {
+    const el = $("#" + id);
+    if (el && S.subTextColor) el.value = S.subTextColor;
+  });
+  ["subHighlightColor", "visualSubHighlightColor"].forEach(id => {
+    const el = $("#" + id);
+    if (el && S.subHighlightColor) el.value = S.subHighlightColor;
+  });
+  ["subOutlineColor", "visualSubOutlineColor"].forEach(id => {
+    const el = $("#" + id);
+    if (el && S.subOutlineColor) el.value = S.subOutlineColor;
+  });
+
+  const pvCam = $("#pv");
+  updateSubtitleOverlayAtTime(pvCam ? pvCam.currentTime : 0);
+}
+
+const subTextInp = $("#subTextColor"), visSubTextInp = $("#visualSubTextColor");
+if (subTextInp) subTextInp.oninput = e => syncSubtitleColors(e.target.value, null, null);
+if (visSubTextInp) visSubTextInp.oninput = e => syncSubtitleColors(e.target.value, null, null);
+
+const subHighInp = $("#subHighlightColor"), visSubHighInp = $("#visualSubHighlightColor");
+if (subHighInp) subHighInp.oninput = e => syncSubtitleColors(null, e.target.value, null);
+if (visSubHighInp) visSubHighInp.oninput = e => syncSubtitleColors(null, e.target.value, null);
+
+const subOutInp = $("#subOutlineColor"), visSubOutInp = $("#visualSubOutlineColor");
+if (subOutInp) subOutInp.oninput = e => syncSubtitleColors(null, null, e.target.value);
+if (visSubOutInp) visSubOutInp.oninput = e => syncSubtitleColors(null, null, e.target.value);
+
+function resetSubtitleColors() {
+  const cap = S.cap || "hormozi";
+  let defText = "#ffffff", defHigh = "#ffe600", defOut = "#000000";
+  if (cap === "karaoke" || cap === "pop_destaque") {
+    defHigh = "#ff6a00";
+  } else if (cap === "karaoke_ciano" || cap === "karaoke_neon") {
+    defHigh = "#00d2b4";
+  } else if (cap === "verde_limao") {
+    defHigh = "#00ff66";
+  } else if (cap === "rubi_impacto") {
+    defHigh = "#ff2a55";
+  } else if (cap === "caixa_amarela_sub") {
+    defText = "#000000";
+    defHigh = "#ffffff";
+    defOut = "#ffe600";
+  }
+  syncSubtitleColors(defText, defHigh, defOut);
+}
+
+const btnResetSubColors = $("#btnResetSubColors");
+if (btnResetSubColors) {
+  btnResetSubColors.onclick = resetSubtitleColors;
+}
 
 // Toggle do Gabarito da Zona Segura Reels / TikTok (420px)
 const btnToggleSafeZone = $("#btnToggleSafeZone");
@@ -2616,4 +2877,6 @@ if (tlScrollEl) {
 
 drawOptions();
 renderMediaLists();
+loadCustomFonts();
+resetSubtitleColors();
 tab("corte");

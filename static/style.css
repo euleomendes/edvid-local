@@ -322,39 +322,39 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
 }
 
 /* ========================================================
-   ANIMAÇÕES DE PREVIEW DE LEGENDAS (ESTILO VIRAL)
+   ANIMAÇÕES DE PREVIEW DE LEGENDAS (ESTILO VIRAL - SEM GLOW)
    ======================================================== */
 @keyframes hormoziPop {
-  0%, 100% { transform: scale(1); color: #fff; text-shadow: 0 0 4px #000; }
-  33% { transform: scale(1.18); color: #ffe600; text-shadow: 0 0 8px rgba(255, 230, 0, 0.8), 0 0 4px #000; }
+  0%, 100% { transform: scale(1); color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; }
+  33% { transform: scale(1.18); color: #ffe600; text-shadow: 1.5px 1.5px 0 #000, -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000; }
 }
 
 @keyframes karaokeNeonAnim {
-  0%, 20% { color: #fff; text-shadow: 0 0 2px #000; }
-  25%, 50% { color: #00d2b4; text-shadow: 0 0 8px #00d2b4, 0 0 16px rgba(0, 210, 180, 0.6); }
-  55%, 100% { color: #fff; text-shadow: 0 0 2px #000; }
+  0%, 20% { color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000; }
+  25%, 50% { color: #00d2b4; text-shadow: 1.5px 1.5px 0 #000, -1.5px -1.5px 0 #000; }
+  55%, 100% { color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000; }
 }
 
 @keyframes karaokeOrangeAnim {
-  0%, 20% { color: #fff; text-shadow: 0 0 2px #000; }
-  25%, 50% { color: #ff6a00; text-shadow: 0 0 8px #ff6a00, 0 0 14px rgba(255, 106, 0, 0.5); }
-  55%, 100% { color: #fff; text-shadow: 0 0 2px #000; }
+  0%, 20% { color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000; }
+  25%, 50% { color: #ff6a00; text-shadow: 1.5px 1.5px 0 #000, -1.5px -1.5px 0 #000; }
+  55%, 100% { color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000; }
 }
 
 @keyframes popBounce {
   0%, 15% { transform: scale(0.92); opacity: 0.7; }
-  20%, 45% { transform: scale(1.15); opacity: 1; color: #ff6a00; }
+  20%, 45% { transform: scale(1.15); opacity: 1; color: #ffe600; }
   50%, 100% { transform: scale(1); opacity: 0.95; color: #fff; }
 }
 
 @keyframes pulseGently {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); text-shadow: 0 0 10px rgba(255,255,255,0.8); }
+  0%, 100% { transform: scale(1); text-shadow: 1px 1px 0 #000; }
+  50% { transform: scale(1.08); text-shadow: 1.5px 1.5px 0 #000, -1.5px -1.5px 0 #000; }
 }
 
 @keyframes shimmerLuxo {
-  0%, 100% { opacity: 0.85; }
-  50% { opacity: 1; text-shadow: 0 0 8px rgba(255,255,255,0.7); }
+  0%, 100% { opacity: 0.85; text-shadow: 1px 1px 0 #000; }
+  50% { opacity: 1; text-shadow: 1.5px 1.5px 0 #000; }
 }
 
 .anim-hormozi {
@@ -1044,32 +1044,42 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
   text-align: center;
   pointer-events: none;
   user-select: none;
-  white-space: nowrap !important;
-  word-break: keep-all !important;
-  line-height: 1.15;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  max-width: 90cqw;
+  line-height: var(--hl-line-spacing, 1.15);
+  letter-spacing: var(--hl-letter-spacing, 1px);
 }
 
-/* Estilos de Headline com fidelidade 1:1 ao FFmpeg */
+.hl-textarea {
+  resize: vertical;
+  min-height: 52px;
+  font-family: inherit;
+  line-height: 1.35;
+}
+
+/* Estilos de Headline com fidelidade 1:1 ao FFmpeg (Sem Glow) */
 .hl-style-bebas_impact {
   font-family: Impact, 'Arial Black', sans-serif;
   font-size: 6.67cqw;
   -webkit-text-stroke: 0.37cqw var(--hl-out-color, #000000);
-  text-shadow: 0 0 0.3cqw var(--hl-out-color, #000000), 0 0.28cqw 0.55cqw rgba(0,0,0,0.85);
-  letter-spacing: 0.05cqw;
+  text-shadow: 0 0.19cqw 0.37cqw rgba(0,0,0,0.9);
+  letter-spacing: var(--hl-letter-spacing, 0.05cqw);
 }
 
 .hl-style-neon_cyber {
   font-family: 'Arial Black', sans-serif;
   font-size: 5.93cqw;
+  color: var(--hl-text-color, #00d2b4);
   -webkit-text-stroke: 0.37cqw var(--hl-out-color, #000000);
-  text-shadow: 0 0 0.74cqw var(--hl-text-color, #00d2b4), 0 0 1.48cqw rgba(0,210,180,0.6), 0 0.19cqw 0.37cqw #000000;
+  text-shadow: 0 0.19cqw 0.37cqw #000000;
 }
 
 .hl-style-contorno {
   font-family: 'Arial Black', sans-serif;
   font-size: 6.30cqw;
   -webkit-text-stroke: 0.46cqw var(--hl-out-color, #000000);
-  text-shadow: 0 0 0.4cqw #000, 0 0.25cqw 0.5cqw rgba(0,0,0,0.9);
+  text-shadow: 0 0.25cqw 0.5cqw rgba(0,0,0,0.9);
 }
 
 .hl-style-caixa_preta {
@@ -1095,9 +1105,9 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
 .hl-style-laranja_texto {
   font-family: 'Arial Black', sans-serif;
   font-size: 6.30cqw;
-  color: #ff6a00;
-  -webkit-text-stroke: 0.46cqw #000000;
-  text-shadow: 0 0 0.55cqw rgba(255,106,0,0.6), 0 0.19cqw 0.37cqw #000;
+  color: var(--hl-text-color, #ff6a00);
+  -webkit-text-stroke: 0.46cqw var(--hl-out-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
 }
 
 /* Conteúdo da Legenda no Preview (Dimensões travadas para reposicionamento X e Y puro) */
@@ -1121,22 +1131,42 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
   white-space: nowrap !important;
   word-break: keep-all !important;
   transition: color .15s;
+  color: var(--sub-text-color, #ffffff);
+}
+.sub-preview-content b {
+  color: var(--sub-highlight-color, #ffe600);
 }
 
-/* Estilos Específicos das Legendas no Preview (Proporções exatas ASS 1080x1920) */
+/* Estilos Específicos das Legendas no Preview (Sem Glow / Alto Contraste 1:1 ao FFmpeg) */
 .sub-style-hormozi {
   font-family: Impact, 'Arial Black', sans-serif;
   font-weight: 900;
   font-size: 5.93cqw;
   text-transform: uppercase;
-  color: #ffffff;
-  -webkit-text-stroke: 0.37cqw #000000;
-  text-shadow: 0 0 0.3cqw #000, 0 0.28cqw 0.55cqw rgba(0,0,0,0.9);
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.37cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw rgba(0,0,0,0.95);
   letter-spacing: 0.05cqw;
 }
 .sub-style-hormozi b {
-  color: #ffe600;
-  text-shadow: 0 0 0.74cqw rgba(255,230,0,0.8), 0 0 0.28cqw #000;
+  color: var(--sub-highlight-color, #ffe600);
+  -webkit-text-stroke: 0.37cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw rgba(0,0,0,0.95);
+}
+
+.sub-style-karaoke_ciano {
+  font-family: 'Arial Black', sans-serif;
+  font-weight: 900;
+  font-size: 5.56cqw;
+  text-transform: uppercase;
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.32cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
+}
+.sub-style-karaoke_ciano b {
+  color: var(--sub-highlight-color, #00d2b4);
+  -webkit-text-stroke: 0.32cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
 }
 
 .sub-style-karaoke_neon {
@@ -1144,35 +1174,35 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
   font-weight: 900;
   font-size: 5.56cqw;
   text-transform: uppercase;
-  color: #ffffff;
-  -webkit-text-stroke: 0.32cqw #000000;
-  text-shadow: 0 0 0.3cqw #000, 0 0.19cqw 0.37cqw #000;
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.32cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
 }
 .sub-style-karaoke_neon b {
-  color: #00d2b4;
-  -webkit-text-stroke: 0.32cqw #000000;
-  text-shadow: 0 0 0.74cqw #00d2b4, 0 0 1.48cqw rgba(0,210,180,0.6), 0 0.19cqw 0.37cqw #000;
+  color: var(--sub-highlight-color, #00d2b4);
+  -webkit-text-stroke: 0.32cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
 }
 
 .sub-style-pop_destaque {
   font-family: Arial, sans-serif;
   font-weight: 900;
   font-size: 6.30cqw;
-  color: #fef08a;
-  background: rgba(0, 0, 0, 0.85);
+  color: var(--sub-highlight-color, #fef08a);
+  background: rgba(0, 0, 0, 0.88);
   padding: 0.4cqw 1cqw;
   border-radius: 0.6cqw;
   border: 1px solid rgba(254, 240, 138, 0.35);
-  box-shadow: 0 0.2cqw 0.74cqw rgba(0,0,0,0.8);
+  box-shadow: 0 0.2cqw 0.74cqw rgba(0,0,0,0.85);
 }
 
 .sub-style-destaque {
   font-family: Arial, sans-serif;
   font-weight: 900;
   font-size: 5.56cqw;
-  color: #ffffff;
-  -webkit-text-stroke: 0.28cqw #000000;
-  text-shadow: 0 0 0.28cqw #000, 0 0.19cqw 0.46cqw rgba(0,0,0,0.95);
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.28cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.46cqw rgba(0,0,0,0.95);
 }
 
 .sub-style-karaoke {
@@ -1180,22 +1210,85 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
   font-weight: 900;
   font-size: 5.56cqw;
   text-transform: uppercase;
-  color: #ffffff;
-  -webkit-text-stroke: 0.28cqw #000000;
-  text-shadow: 0 0 0.3cqw #000, 0 0.19cqw 0.37cqw #000;
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.28cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
 }
 .sub-style-karaoke b {
-  color: #ff6a00;
-  -webkit-text-stroke: 0.28cqw #000000;
-  text-shadow: 0 0 0.55cqw rgba(255,106,0,0.8), 0 0.19cqw 0.37cqw #000;
+  color: var(--sub-highlight-color, #ff6a00);
+  -webkit-text-stroke: 0.28cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
+}
+
+.sub-style-caixa_preta_sub {
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-weight: 900;
+  font-size: 5.5cqw;
+  text-transform: uppercase;
+  color: var(--sub-text-color, #ffffff);
+  background: #000000;
+  padding: 0.35cqw 1.2cqw;
+  border-radius: 0.5cqw;
+  box-shadow: 0 0.28cqw 0.74cqw rgba(0,0,0,0.85);
+}
+.sub-style-caixa_preta_sub b {
+  color: var(--sub-highlight-color, #ffe600);
+}
+
+.sub-style-caixa_amarela_sub {
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-weight: 900;
+  font-size: 5.5cqw;
+  text-transform: uppercase;
+  color: var(--sub-text-color, #000000);
+  background: #ffe600;
+  padding: 0.35cqw 1.2cqw;
+  border-radius: 0.5cqw;
+  box-shadow: 0 0.28cqw 0.74cqw rgba(0,0,0,0.85);
+}
+.sub-style-caixa_amarela_sub b {
+  color: var(--sub-highlight-color, #ffffff);
+  background: #000000;
+  padding: 0.1cqw 0.4cqw;
+  border-radius: 0.3cqw;
+}
+
+.sub-style-verde_limao {
+  font-family: 'Arial Black', Impact, sans-serif;
+  font-weight: 900;
+  font-size: 5.6cqw;
+  text-transform: uppercase;
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.34cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
+}
+.sub-style-verde_limao b {
+  color: var(--sub-highlight-color, #00ff66);
+  -webkit-text-stroke: 0.34cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
+}
+
+.sub-style-rubi_impacto {
+  font-family: Impact, sans-serif;
+  font-weight: 900;
+  font-size: 5.8cqw;
+  text-transform: uppercase;
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.35cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
+}
+.sub-style-rubi_impacto b {
+  color: var(--sub-highlight-color, #ff2a55);
+  -webkit-text-stroke: 0.35cqw var(--sub-outline-color, #000000);
+  text-shadow: 0 0.19cqw 0.37cqw #000;
 }
 
 .sub-style-serif_luxo {
   font-family: Georgia, 'Playfair Display', serif;
   font-style: italic;
   font-size: 5.19cqw;
-  color: #ffffff;
-  -webkit-text-stroke: 0.19cqw #000000;
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.19cqw var(--sub-outline-color, #000000);
   text-shadow: 0 0.19cqw 0.55cqw rgba(0,0,0,0.9);
   letter-spacing: 0.05cqw;
 }
@@ -1204,7 +1297,7 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
   font-family: Inter, Arial, sans-serif;
   font-weight: 600;
   font-size: 4.44cqw;
-  color: #ffffff;
+  color: var(--sub-text-color, #ffffff);
   background: rgba(0, 0, 0, 0.65);
   padding: 0.3cqw 0.8cqw;
   border-radius: 0.4cqw;
@@ -1215,8 +1308,8 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
   font-family: Arial, sans-serif;
   font-weight: 600;
   font-size: 3.33cqw;
-  color: #ffffff;
-  -webkit-text-stroke: 0.19cqw #000000;
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.19cqw var(--sub-outline-color, #000000);
   text-shadow: 0 0.1cqw 0.28cqw rgba(0,0,0,0.9);
 }
 
@@ -1224,8 +1317,8 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
   font-family: Georgia, 'Playfair Display', serif;
   font-weight: 900;
   font-size: 5.19cqw;
-  color: #ffffff;
-  -webkit-text-stroke: 0.2cqw #000000;
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.2cqw var(--sub-outline-color, #000000);
   text-shadow: 0 0.19cqw 0.4cqw rgba(0,0,0,0.9);
 }
 
@@ -1233,8 +1326,8 @@ input[type=file]{color:#ccc;margin:6px 0;max-width:100%}
   font-family: Arial, sans-serif;
   font-weight: 700;
   font-size: 4.44cqw;
-  color: #ffffff;
-  -webkit-text-stroke: 0.2cqw #000000;
+  color: var(--sub-text-color, #ffffff);
+  -webkit-text-stroke: 0.2cqw var(--sub-outline-color, #000000);
   text-shadow: 0 0.1cqw 0.3cqw rgba(0,0,0,0.9);
 }
 
