@@ -205,6 +205,10 @@ CAPTION_STYLES = {
     "caixa_amarela_sub": dict(font="Arial Black", size=14, primary="&H00000000", sec="&H00000000", outline_c="&H0000E6FF", bold=-1, bs=3, outline=12, upper=True),
     "verde_limao": dict(font="Arial Black", size=15, primary="&H005EC522", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=3.5, upper=True),
     "rubi_impacto": dict(font="Arial Black", size=15, primary="&H004444EF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=4, upper=True),
+    "ouro_premium": dict(font="Arial Black", size=16, primary="&H0000D7FF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=4, upper=True),
+    "azul_royal": dict(font="Arial Black", size=16, primary="&H00FF9900", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=4, upper=True),
+    "roxo_cyber": dict(font="Arial Black", size=16, primary="&H00FF26B0", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=4, upper=True),
+    "caixa_vermelha": dict(font="Arial Black", size=14, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H004444EF", bold=-1, bs=3, outline=12, upper=True),
     "serif_destaque": dict(font="Georgia", size=14, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=2, upper=False),
     "serif_luxo": dict(font="Georgia", size=14, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=0, bs=1, outline=2, upper=False),
     "clean_minimal": dict(font="Arial", size=12, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=0, bs=1, outline=1.5, upper=False),
@@ -310,10 +314,10 @@ def map_time_after_cuts(orig_t, effective_silences):
     return max(0.0, round(orig_t - cut_amount, 2))
 
 
-def chunk_words(words, max_words=3, max_duration=1.25):
+def chunk_words(words, max_words=2, max_duration=1.0):
     """
-    Agrupa palavras individuais em blocos curtos e dinâmicos (1 a 3 palavras por tela).
-    Evita blocos longos com 3 linhas na tela.
+    Agrupa palavras individuais em blocos curtos e dinâmicos (1 a 2 palavras por tela).
+    Evita sobrecarga visual e melhora a leitura dinâmica.
     """
     if not words:
         return []
@@ -470,8 +474,8 @@ def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False
                             "end": round(seg["start"] + (idx + 1) * step, 2)
                         })
 
-    # Divide em chunks virais curtos (1 a 3 palavras por tela) posicionados no canvas
-    chunks = chunk_words(all_words, max_words=3, max_duration=1.25)
+    # Divide em chunks virais curtos (1 a 2 palavras por tela) posicionados no canvas
+    chunks = chunk_words(all_words, max_words=2, max_duration=1.0)
     for chunk in chunks:
         c_start = chunk[0]["start"]
         c_end = chunk[-1]["end"]
@@ -743,7 +747,7 @@ def export():
     sub_text_color = data.get("sub_text_color")
     sub_highlight_color = data.get("sub_highlight_color")
     sub_outline_color = data.get("sub_outline_color")
-    karaoke = bool(data.get("karaoke")) or ("karaoke" in caption_style) or (caption_style in ("hormozi", "karaoke_neon"))
+    karaoke = bool(data.get("karaoke")) or ("karaoke" in caption_style) or (caption_style in ("hormozi", "karaoke_neon", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub", "ouro_premium", "azul_royal", "roxo_cyber", "caixa_vermelha"))
     zoom_continuous = bool(data.get("zoom_continuous"))
     zoom_cuts = bool(data.get("zoom_cuts"))
     flash_cuts = bool(data.get("flash_cuts"))

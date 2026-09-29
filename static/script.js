@@ -55,6 +55,10 @@ const CAPS = [
   ["karaoke", "Karaokê Laranja", `<div class="anim-karaoke-orange"><span>É</span><span>ASSIM</span><span>QUE</span></div>`],
   ["verde_limao", "Verde Limão", `<div style="font-family:'Arial Black',Impact,sans-serif;font-weight:900;font-size:11.5px;color:#00ff66;-webkit-text-stroke:0.8px #000;text-transform:uppercase;">VIRAL VERDE</div>`],
   ["rubi_impacto", "Rubi Impacto", `<div style="font-family:Impact,sans-serif;font-weight:900;font-size:12px;color:#ff2a55;-webkit-text-stroke:0.8px #000;text-transform:uppercase;">RUBI IMPACTO</div>`],
+  ["ouro_premium", "Dourado Premium", `<div style="font-family:Impact,sans-serif;font-weight:900;font-size:12px;color:#ffd700;-webkit-text-stroke:0.8px #000;text-transform:uppercase;">DOURADO VIP</div>`],
+  ["azul_royal", "Azul Royal", `<div style="font-family:'Arial Black',sans-serif;font-weight:900;font-size:11.5px;color:#0099ff;-webkit-text-stroke:0.8px #000;text-transform:uppercase;">AZUL ROYAL</div>`],
+  ["roxo_cyber", "Roxo Cyber", `<div style="font-family:Impact,sans-serif;font-weight:900;font-size:12px;color:#b026ff;-webkit-text-stroke:0.8px #000;text-transform:uppercase;">ROXO CYBER</div>`],
+  ["caixa_vermelha", "Caixa Vermelha", `<div style="background:#ef4444;color:#fff;font-weight:900;font-size:10px;padding:3px 7px;border-radius:3px;text-transform:uppercase;">CAIXA VERMELHA</div>`],
   ["caixa_preta_sub", "Caixa Preta", `<div style="background:#000;color:#fff;font-weight:900;font-size:10px;padding:3px 7px;border-radius:3px;text-transform:uppercase;">CAIXA PRETA</div>`],
   ["caixa_amarela_sub", "Caixa Amarela", `<div style="background:#ffe600;color:#000;font-weight:900;font-size:10px;padding:3px 7px;border-radius:3px;text-transform:uppercase;">CAIXA AMARELA</div>`],
   ["destaque", "Destaque Branco", `<div class="anim-pulse">APARECER</div>`],
@@ -301,6 +305,7 @@ document.addEventListener("click", e => {
   if (o) {
     S[o.dataset.k] = o.dataset.id;
     if (S.tipo !== "unica") S.el.tracking = 0;
+    if (o.dataset.k === "cap") resetSubtitleColors();
     drawOptions();
     drawTL();
   }
@@ -1813,13 +1818,13 @@ function getSubtitleChunks() {
     }
   }
 
-  // Chunker idêntico a chunk_words() no app.py (max_words=3, max_duration=1.25)
+  // Chunker idêntico a chunk_words() no app.py (max_words=2, max_duration=1.0)
   const chunks = [];
   let cur = [];
   for (const w of allWords) {
     cur.push(w);
     const dur = cur[cur.length - 1].end - cur[0].start;
-    if (cur.length >= 3 || dur >= 1.25) {
+    if (cur.length >= 2 || dur >= 1.0) {
       chunks.push({
         words: cur,
         start: cur[0].start,
@@ -1886,15 +1891,15 @@ function updateSubtitleOverlayAtTime(curTime) {
   contentEl.className = "sub-preview-content sub-style-" + capStyle;
 
   const chunks = getSubtitleChunks();
-  const isKaraokeStyle = ["hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub"].includes(capStyle);
-  const isUpper = ["hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "destaque", "pop_destaque", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub"].includes(capStyle);
+  const isKaraokeStyle = ["hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub", "ouro_premium", "azul_royal", "roxo_cyber", "caixa_vermelha"].includes(capStyle);
+  const isUpper = ["hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "destaque", "pop_destaque", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub", "ouro_premium", "azul_royal", "roxo_cyber", "caixa_vermelha"].includes(capStyle);
 
-  // Se não há legendas transcritas ainda, exibe placeholder limpo de 3 palavras
+  // Se não há legendas transcritas ainda, exibe placeholder limpo de 2 palavras
   if (!chunks || chunks.length === 0) {
     if (isKaraokeStyle) {
-      contentEl.innerHTML = `<b>SUA</b> LEGENDA AQUI`;
+      contentEl.innerHTML = `<b>SUA</b> LEGENDA`;
     } else {
-      contentEl.textContent = isUpper ? "SUA LEGENDA AQUI" : "Sua Legenda Aqui";
+      contentEl.textContent = isUpper ? "SUA LEGENDA" : "Sua Legenda";
     }
     return;
   }
@@ -2281,6 +2286,16 @@ function resetSubtitleColors() {
     defHigh = "#00ff66";
   } else if (cap === "rubi_impacto") {
     defHigh = "#ff2a55";
+  } else if (cap === "ouro_premium") {
+    defHigh = "#ffd700";
+  } else if (cap === "azul_royal") {
+    defHigh = "#0099ff";
+  } else if (cap === "roxo_cyber") {
+    defHigh = "#b026ff";
+  } else if (cap === "caixa_vermelha") {
+    defText = "#ffffff";
+    defHigh = "#ffffff";
+    defOut = "#ef4444";
   } else if (cap === "caixa_amarela_sub") {
     defText = "#000000";
     defHigh = "#ffffff";
@@ -2538,6 +2553,7 @@ if (visualCapStyleSelect) {
   visualCapStyleSelect.onchange = function() {
     S.cap = this.value;
     S.captionDisabled = (this.value === "nenhuma");
+    resetSubtitleColors();
     drawOptions();
     drawTL();
     const v = (S.viewMode === "rendered") ? $("#pvRenderedFull") : pv;
