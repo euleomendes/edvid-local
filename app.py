@@ -810,6 +810,7 @@ def export():
                 is_muted = bool(m.get("muted", False))
                 vol = float(m.get("volume", 1.0) if m.get("volume") is not None else 1.0)
                 vol = max(0.0, min(2.0, vol))
+                media_offset = max(0.0, float(m.get("media_offset", 0.0) or 0.0))
                 has_audio = (not is_img) and (not is_muted) and (vol > 0.0) and check_has_audio(p)
                 valid_media.append({
                     "path": p,
@@ -820,7 +821,8 @@ def export():
                     "is_img": is_img,
                     "muted": is_muted,
                     "volume": vol,
-                    "has_audio": has_audio
+                    "has_audio": has_audio,
+                    "media_offset": round(media_offset, 2)
                 })
 
         if tipo in ("dividida", "dividida2") and valid_media:
@@ -843,8 +845,10 @@ def export():
                     )
                 else:
                     media_input_args.extend(["-stream_loop", "-1", "-i", str(item["path"])])
+                    offset = item.get("media_offset", 0.0)
+                    trim_part = f"trim=start={offset:.2f}," if offset > 0 else ""
                     filter_parts.append(
-                        f"[{idx}:v]scale=1080:{H_MEDIA}:force_original_aspect_ratio=increase,crop=1080:{H_MEDIA}:{crop_x_item}:{crop_y_item},setpts=PTS-STARTPTS+{item['start']:.2f}/TB[mscale{i}];"
+                        f"[{idx}:v]{trim_part}scale=1080:{H_MEDIA}:force_original_aspect_ratio=increase,crop=1080:{H_MEDIA}:{crop_x_item}:{crop_y_item},setpts=PTS-STARTPTS+{item['start']:.2f}/TB[mscale{i}];"
                         f"[mbase{i}][mscale{i}]overlay=0:0:enable='between(t,{item['start']:.2f},{item['end']:.2f})':eof_action=pass[mbase{i+1}]"
                     )
 
@@ -868,8 +872,9 @@ def export():
                     dur_clip = item["end"] - item["start"]
                     delay_ms = int(item["start"] * 1000)
                     vol = item["volume"]
+                    offset = item.get("media_offset", 0.0)
                     filter_parts.append(
-                        f"[{idx}:a]atrim=0:{dur_clip:.2f},asetpts=PTS-STARTPTS,adelay={delay_ms}|{delay_ms},volume={vol:.2f}[aclip{i}]"
+                        f"[{idx}:a]atrim={offset:.2f}:{offset + dur_clip:.2f},asetpts=PTS-STARTPTS,adelay={delay_ms}|{delay_ms},volume={vol:.2f}[aclip{i}]"
                     )
                     audio_tracks.append(f"[aclip{i}]")
 
@@ -923,8 +928,10 @@ def export():
                     )
                 else:
                     media_input_args.extend(["-stream_loop", "-1", "-i", str(item["path"])])
+                    offset = item.get("media_offset", 0.0)
+                    trim_part = f"trim=start={offset:.2f}," if offset > 0 else ""
                     filter_parts.append(
-                        f"[{idx}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:{crop_x_item}:{crop_y_item},setpts=PTS-STARTPTS+{item['start']:.2f}/TB[mscale{i}];"
+                        f"[{idx}:v]{trim_part}scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:{crop_x_item}:{crop_y_item},setpts=PTS-STARTPTS+{item['start']:.2f}/TB[mscale{i}];"
                         f"[basev{i}][mscale{i}]overlay=0:0:enable='between(t,{item['start']:.2f},{item['end']:.2f})':eof_action=pass[basev{i+1}]"
                     )
             filter_parts.append(f"[basev{len(valid_media)}]copy[v]")
@@ -936,8 +943,9 @@ def export():
                     dur_clip = item["end"] - item["start"]
                     delay_ms = int(item["start"] * 1000)
                     vol = item["volume"]
+                    offset = item.get("media_offset", 0.0)
                     filter_parts.append(
-                        f"[{idx}:a]atrim=0:{dur_clip:.2f},asetpts=PTS-STARTPTS,adelay={delay_ms}|{delay_ms},volume={vol:.2f}[aclip{i}]"
+                        f"[{idx}:a]atrim={offset:.2f}:{offset + dur_clip:.2f},asetpts=PTS-STARTPTS,adelay={delay_ms}|{delay_ms},volume={vol:.2f}[aclip{i}]"
                     )
                     audio_tracks.append(f"[aclip{i}]")
 

@@ -27,6 +27,8 @@ const S = {
   safeZoneVisible: false,
   el: { cutSilence: 1, flash: 1, zoomCuts: 1, tracking: 0, zoomC: 0, music: 0 },
   mediaItems: [],
+  selectedMediaId: null,
+  snapEnabled: true,
   renderedUrl: null,
   originalUrl: null,
   viewMode: "original",
@@ -86,9 +88,15 @@ function tab(name) {
     if (prevP && !prevP.paused) prevP.pause();
     if (prevP && pvP && !pvP.src && prevP.src) pvP.src = prevP.src;
     if (prevP && pvP && prevP.currentTime) pvP.currentTime = prevP.currentTime;
+    const phoneFrame = $("#phoneFrame");
+    if (phoneFrame) phoneFrame.className = `phone-frame layout-${S.tipo}`;
+    setVideoViewMode("original");
     drawTL();
     updateHeadlineOverlay();
-    updateSubtitleOverlayAtTime(pvP ? pvP.currentTime : 0);
+    const curT = pvP ? pvP.currentTime : 0;
+    updateSubtitleOverlayAtTime(curT);
+    updateMediaPreviewAtTime(curT);
+    applyObjectPositions();
   } else if (name === "corte") {
     if (pvP && !pvP.paused) pvP.pause();
     if (prevP && pvP && pvP.currentTime) prevP.currentTime = pvP.currentTime;
@@ -550,24 +558,176 @@ function distributeMediaItems() {
   const d = S.dur || 10;
   const slot = d / S.mediaItems.length;
   S.mediaItems.forEach((m, idx) => {
-    m.start = Math.round(idx * slot * 10) / 10;
-    m.end = Math.round((idx + 1) * slot * 10) / 10;
+    m.start = Math.round(idx * slot * 100) / 100;
+    m.end = Math.round((idx + 1) * slot * 100) / 100;
   });
   renderMediaLists();
   drawTL();
+  const p = pv || prevPlayer;
+  updateMediaPreviewAtTime(p ? p.currentTime : 0);
 }
 
 function removeMediaItem(id) {
   S.mediaItems = S.mediaItems.filter(m => m.id !== id);
+  if (S.selectedMediaId === id) S.selectedMediaId = null;
   renderMediaLists();
   drawTL();
+  const p = pv || prevPlayer;
+  updateMediaPreviewAtTime(p ? p.currentTime : 0);
+}
+
+function splitMediaItem(id = null, cutTime = null) {
+  if (!S.mediaItems || S.mediaItems.length === 0) return;
+  const p = pv || prevPlayer;
+  const curT = (cutTime !== null && cutTime !== undefined) ? cutTime : (p ? p.currentTime : 0);
+
+  let target = null;
+  if (id) {
+    target = S.mediaItems.find(m => m.id === id);
+  } else if (S.selectedMediaId) {
+    target = S.mediaItems.find(m => m.id === S.selectedMediaId);
+  }
+  // Se ainda não encontrou ou o tempo está fora do alvo, procura o item sob a agulha
+  if (!target || curT <= target.start || curT >= target.end) {
+    target = S.mediaItems.find(m => curT > m.start + 0.1 && curT < m.end - 0.1);
+  }
+
+  if (!target) {
+    const hint = $("#visualReRenderStatus") || $("#rStatus");
+    if (hint) {
+      hint.textContent = "Posicione a agulha sobre um clipe de mídia para cortar (✂).";
+      setTimeout(() => { if (hint) hint.textContent = ""; }, 3000);
+    }
+    return;
+  }
+
+  const cut = Math.round(curT * 100) / 100;
+  if (cut <= target.start + 0.15 || cut >= target.end - 0.15) {
+    return;
+  }
+
+  const originalEnd = target.end;
+  const originalOffset = target.media_offset || 0;
+  const durFirstPart = cut - target.start;
+  const newOffset = originalOffset + durFirstPart;
+
+  const newId = "m_" + Math.random().toString(36).substr(2, 9);
+  const m2 = {
+    ...target,
+    id: newId,
+    start: cut,
+    end: originalEnd,
+    media_offset: Math.round(newOffset * 100) / 100,
+    linked: !!target.linked
+  };
+
+  target.end = cut;
+
+  const idx = S.mediaItems.findIndex(x => x.id === target.id);
+  S.mediaItems.splice(idx + 1, 0, m2);
+  S.selectedMediaId = newId;
+
+  renderMediaLists();
+  drawTL();
+  updateMediaPreviewAtTime(cut);
+
+  const stat = $("#visualReRenderStatus");
+  if (stat) {
+    stat.textContent = `✂ Mídia dividida em ${cut.toFixed(2)}s!`;
+    setTimeout(() => { if (stat) stat.textContent = ""; }, 2500);
+  }
+}
+
+function toggleMediaLink(id) {
+  const m = S.mediaItems.find(x => x.id === id);
+  if (!m) return;
+  m.linked = !m.linked;
+  if (m.linked) {
+    const allPoints = [0.0, ...(S.cuts || [])].sort((a, b) => a - b);
+    let best = 0.0;
+    for (const pt of allPoints) {
+      if (pt <= m.start + 0.1) best = pt;
+      else break;
+    }
+    m.linkedSceneStart = best;
+    m.linkedOffset = Math.max(0, Math.round((m.start - best) * 100) / 100);
+  } else {
+    delete m.linkedSceneStart;
+    delete m.linkedOffset;
+  }
+  renderMediaLists();
+  drawTL();
+}
+
+function getSnapTargets(excludeMediaId = null) {
+  const pts = new Set();
+  pts.add(0.0);
+  if (S.dur) pts.add(S.dur);
+
+  if (S.cuts && S.cuts.length) {
+    S.cuts.forEach(c => pts.add(c));
+  }
+
+  if (S.silenceCuts && S.silenceCuts.length) {
+    S.silenceCuts.forEach(c => pts.add(c));
+  }
+
+  const p = pv || prevPlayer;
+  if (p && Number.isFinite(p.currentTime)) {
+    pts.add(Math.round(p.currentTime * 100) / 100);
+  }
+
+  if (S.mediaItems && S.mediaItems.length) {
+    S.mediaItems.forEach(m => {
+      if (m.id !== excludeMediaId) {
+        pts.add(m.start);
+        pts.add(m.end);
+      }
+    });
+  }
+
+  return Array.from(pts).sort((a, b) => a - b);
+}
+
+function snapTime(time, targets, thresholdPx = 10) {
+  if (!S.snapEnabled || !targets || !targets.length) {
+    return { time: time, snapped: false, target: null };
+  }
+  const pps = S.pps || 20;
+  const thresholdSec = thresholdPx / pps;
+  let bestDist = Infinity;
+  let bestTarget = null;
+
+  for (const t of targets) {
+    const dist = Math.abs(time - t);
+    if (dist <= thresholdSec && dist < bestDist) {
+      bestDist = dist;
+      bestTarget = t;
+    }
+  }
+
+  if (bestTarget !== null) {
+    return { time: bestTarget, snapped: true, target: bestTarget };
+  }
+  return { time: time, snapped: false, target: null };
+}
+
+function showSnapGuide(xPx) {
+  const guide = $("#snapGuideLine");
+  if (!guide) return;
+  if (xPx === null || xPx === undefined) {
+    guide.style.display = "none";
+  } else {
+    guide.style.display = "block";
+    guide.style.left = xPx + "px";
+  }
 }
 
 function renderMediaLists() {
   const html = S.mediaItems.length === 0
     ? `<div style="font-size:11.5px;color:#6b7280;padding:8px 4px;">Nenhuma mídia adicionada ainda. Clique em "+ Adicionar" acima ou arraste arquivos para a timeline.</div>`
     : S.mediaItems.map((m, idx) => `
-      <div class="media-item-row" data-id="${m.id}">
+      <div class="media-item-row ${m.id === S.selectedMediaId ? 'is-selected' : ''}" data-id="${m.id}">
         <div class="media-thumb">
           ${m.is_img ? `<img src="${m.url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:3px;">` : `🎬`}
         </div>
@@ -597,6 +757,14 @@ function renderMediaLists() {
               <span style="font-size:10.5px;color:#34d399;font-weight:700;width:34px;text-align:right;">${Math.round((m.volume !== undefined ? m.volume : 1.0) * 100)}%</span>
             </div>
           ` : ''}
+          <div style="display:flex;align-items:center;gap:5px;margin-top:5px;">
+            <button type="button" class="btn-split-media-item" data-id="${m.id}" title="Dividir este clipe na posição da agulha (Atalho: S)" style="background:rgba(249,115,22,0.18);border:1px solid rgba(249,115,22,0.4);color:#fed7aa;border-radius:4px;padding:2px 7px;font-size:10px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;font-weight:700;">
+              <span>✂</span> Dividir
+            </button>
+            <button type="button" class="btn-link-media-item ${m.linked ? 'is-linked' : ''}" data-id="${m.id}" title="${m.linked ? 'Vinculado ao vídeo principal (Clique para desvincular)' : 'Vincular ao vídeo principal'}" style="background:${m.linked ? 'rgba(0,210,180,0.22)' : 'rgba(255,255,255,0.06)'};border:1px solid ${m.linked ? '#00d2b4' : '#374151'};color:${m.linked ? '#00d2b4' : '#cbd5e1'};border-radius:4px;padding:2px 7px;font-size:10px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;font-weight:700;">
+              <span>${m.linked ? '🔗' : '⛓️'}</span> ${m.linked ? 'Vinculado' : 'Vincular'}
+            </button>
+          </div>
         </div>
         <button type="button" class="btn-del-media" data-id="${m.id}" title="Retirar este arquivo">🗑</button>
       </div>
@@ -680,6 +848,18 @@ document.addEventListener("click", e => {
   const delBtn = e.target.closest(".btn-del-media");
   if (delBtn) {
     removeMediaItem(delBtn.dataset.id);
+    return;
+  }
+
+  const splitBtn = e.target.closest(".btn-split-media-item");
+  if (splitBtn) {
+    splitMediaItem(splitBtn.dataset.id);
+    return;
+  }
+
+  const linkBtn = e.target.closest(".btn-link-media-item");
+  if (linkBtn) {
+    toggleMediaLink(linkBtn.dataset.id);
     return;
   }
 
@@ -881,6 +1061,7 @@ async function executeRender(isQuickUpdate = false) {
         file_id: m.file_id,
         start: m.start || 0,
         end: m.end || (S.dur || 10),
+        media_offset: m.media_offset || 0,
         framing_x: (m.framing_x !== undefined ? m.framing_x : S.framingX2) / 100.0,
         framing_y: (m.framing_y !== undefined ? m.framing_y : S.framingY2) / 100.0,
         muted: !!m.muted,
@@ -1141,15 +1322,21 @@ function drawTL() {
   // 5. Mídias / Imagens na Timeline (Faixa 6)
   let mediaHtml = "";
   if (S.mediaItems.length > 0) {
-    mediaHtml = S.mediaItems.map(m => `
-      <u class="media-bar" data-id="${m.id}" style="left:${m.start * pps}px;width:${Math.max(20, (m.end - m.start) * pps)}px;" title="${m.name} (${m.start.toFixed(1)}s - ${m.end.toFixed(1)}s)">
+    mediaHtml = S.mediaItems.map(m => {
+      const isSel = S.selectedMediaId === m.id;
+      const isLinked = !!m.linked;
+      return `
+      <u class="media-bar ${isSel ? 'is-selected' : ''}" data-id="${m.id}" style="left:${m.start * pps}px;width:${Math.max(20, (m.end - m.start) * pps)}px;" title="${m.name} (${m.start.toFixed(1)}s - ${m.end.toFixed(1)}s)">
         <span class="media-handle media-handle-l" data-id="${m.id}" title="Puxar para alterar início"></span>
         <span class="media-label-text">${m.is_img ? '🖼' : '🎬'} ${m.name}</span>
         ${!m.is_img ? `<span class="media-audio-toggle-btn ${m.muted ? 'is-muted' : ''}" data-id="${m.id}" title="${m.muted ? 'Mutado (Clique para ativar áudio)' : 'Com áudio (Clique para mutar)'}">${m.muted ? '🔇' : '🔊'}</span>` : ''}
+        <button class="media-split-btn" data-id="${m.id}" title="Dividir clipe no cursor (Atalho: S/C)">✂</button>
+        <button class="media-link-btn ${isLinked ? 'is-linked' : ''}" data-id="${m.id}" title="${isLinked ? 'Desvincular da cena principal' : 'Vincular à cena/corte principal mais próximo'}">${isLinked ? '🔗' : '⛓'}</button>
         <span class="media-del-btn" data-id="${m.id}" title="Retirar este arquivo">✕</span>
         <span class="media-handle media-handle-r" data-id="${m.id}" title="Puxar para alterar fim / duração"></span>
       </u>
-    `).join("");
+    `;
+    }).join("");
   } else if (S.tipo !== "unica") {
     mediaHtml = `<u style="left:4px;width:150px;background:#20140c;border:1px dashed #f97316;color:#fed7aa;cursor:pointer;font-size:10px;text-align:center;line-height:24px;border-radius:4px;" id="tlAddMediaPrompt">+ Adicionar Mídias</u>`;
   }
@@ -1157,7 +1344,7 @@ function drawTL() {
   tl.innerHTML = `
     <div class="ruler">${ruler}</div>
     <!-- Faixa 1: Flags vermelhas dos cortes -->
-    <div class="trk">${S.cuts.map(c => `<b class="flag" style="left:${c * pps}px"></b>`).join("")}</div>
+    <div class="trk">${S.cuts.map((c, idx) => `<b class="flag" data-idx="${idx}" style="left:${c * pps}px" title="Corte na cena em ${c.toFixed(2)}s (Arraste para mover)"></b>`).join("")}</div>
     <!-- Faixa 2: Legendas em ciano -->
     <div class="trk subs">${words.map(w => chip(w[0], w[1], w[2])).join("")}</div>
     <!-- Faixa 3: Cenas / Cortes com rótulos de roteiro -->
@@ -1187,7 +1374,8 @@ function drawTL() {
     <div class="trk media">${mediaHtml}</div>
     <!-- Faixa 7: Trilha sonora listrada -->
     <div class="trk mu">${S.el.music ? chip(0, d, "trilha.mp3 - vol: " + ($("#musicVol") ? $("#musicVol").value : "0.15")) : ""}</div>
-    <div id="ph"></div>
+    <div id="ph"><div class="ph-head" title="Arraste a agulha para navegar (Scrubbing)"></div></div>
+    <div id="snapGuideLine" class="snap-guide-line" style="display:none;"></div>
   `;
 
   const tlPrompt = $("#tlAddMediaPrompt");
@@ -1238,24 +1426,40 @@ function drawTL() {
   }
 }
 
-// INTERAÇÕES DA TIMELINE (SEEK)
+// INTERAÇÕES DA TIMELINE (SEEK / SCRUBBING CONTÍNUO)
+function scrubToTime(t) {
+  const d = S.dur || 10;
+  const time = Math.max(0, Math.min(d, t));
+  const isRenderedView = (S.viewMode === "rendered" && S.renderedUrl);
+  const pvFull = $("#pvRenderedFull");
+  const v = isRenderedView ? (pvFull || pv) : (pv || prevPlayer);
+  if (v) {
+    v.currentTime = time;
+  }
+  const ph = $("#ph");
+  if (ph) {
+    ph.style.left = (time * (S.pps || 20)) + "px";
+  }
+  const clk = $("#clock");
+  if (clk) clk.textContent = `${fmt(time)} / ${fmt(d)}`;
+  highlightActiveSegment(time, true);
+  if (!isRenderedView) {
+    updateMediaPreviewAtTime(time);
+    updateSubtitleOverlayAtTime(time);
+    updateHeadlineOverlay(time);
+  }
+}
+
 const tl_seek = e => {
   if (e.target.closest("#hlBar") || e.target.closest(".hl-handle") || e.target.closest("#tlDelHlBtn") ||
-      e.target.closest(".media-bar") || e.target.closest(".media-handle") || e.target.closest(".media-del-btn")) return;
+      e.target.closest(".media-bar") || e.target.closest(".media-handle") || e.target.closest(".media-del-btn") ||
+      e.target.closest(".media-split-btn") || e.target.closest(".media-link-btn") || e.target.closest(".media-audio-toggle-btn") ||
+      e.target.closest(".flag") || e.target.closest("#ph") || e.target.closest(".ph-head")) return;
   const tl = $("#tl");
   if (!tl) return;
   const x = e.clientX - tl.getBoundingClientRect().left;
-  const seekTime = Math.max(0, x / S.pps);
-  const pvFull = $("#pvRenderedFull");
-  if (pv) pv.currentTime = seekTime;
-  if (pvFull) pvFull.currentTime = seekTime;
-  if (prevPlayer) prevPlayer.currentTime = seekTime;
-  highlightActiveSegment(seekTime, true);
-  if (S.viewMode !== "rendered") {
-    updateMediaPreviewAtTime(seekTime);
-    updateSubtitleOverlayAtTime(seekTime);
-    updateHeadlineOverlay(seekTime);
-  }
+  const seekTime = Math.max(0, x / (S.pps || 20));
+  scrubToTime(seekTime);
 };
 
 // ========================================================
@@ -1459,7 +1663,7 @@ function updateMediaPreviewAtTime(curTime) {
     vidEl.style.objectPosition = `${100 - fx}% ${fy}%`;
 
     // Sincronização de reprodução com o player principal
-    const relT = Math.max(0, curTime - activeItem.start);
+    const relT = Math.max(0, (curTime - activeItem.start) + (activeItem.media_offset || 0));
     const mainPlayer = pv || prevPlayer;
     const isMainPaused = mainPlayer ? mainPlayer.paused : true;
 
@@ -2635,6 +2839,49 @@ function onTimelinePointerDown(e) {
     return;
   }
 
+  // Ações nos botões de mídia
+  const mediaDel = e.target.closest(".media-del-btn");
+  if (mediaDel) {
+    removeMediaItem(mediaDel.dataset.id);
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  const mediaSplit = e.target.closest(".media-split-btn");
+  if (mediaSplit) {
+    const id = mediaSplit.dataset.id;
+    const curTime = (pv ? pv.currentTime : 0);
+    splitMediaItem(id, curTime);
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  const mediaLink = e.target.closest(".media-link-btn");
+  if (mediaLink) {
+    const id = mediaLink.dataset.id;
+    toggleMediaLink(id);
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  const mediaAudio = e.target.closest(".media-audio-toggle-btn");
+  if (mediaAudio) {
+    const id = mediaAudio.dataset.id;
+    const m = S.mediaItems.find(x => x.id === id);
+    if (m) {
+      m.muted = !m.muted;
+      renderMediaLists();
+      drawTL();
+      updateMediaPreviewAtTime(pv ? pv.currentTime : 0);
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
   // 1. Headline Drag & Trim (Aparar Entrada e Saída / Mover)
   const hlBar = e.target.closest("#hlBar");
   if (hlBar) {
@@ -2651,25 +2898,23 @@ function onTimelinePointerDown(e) {
       startX: getPointerClientX(e),
       initialStart: start,
       initialEnd: end,
-      el: hlBar
+      el: hlBar,
+      targets: getSnapTargets()
     };
     e.preventDefault();
     return;
   }
 
-  // 2. Mídia / Imagem Drag & Resize
-  const mediaDel = e.target.closest(".media-del-btn");
-  if (mediaDel) {
-    removeMediaItem(mediaDel.dataset.id);
-    e.preventDefault();
-    return;
-  }
-
+  // 2. Mídia / Imagem Drag & Resize na Faixa Secundária
   const mediaBar = e.target.closest(".media-bar");
   if (mediaBar) {
     const id = mediaBar.dataset.id;
     const m = S.mediaItems.find(x => x.id === id);
     if (!m) return;
+
+    S.selectedMediaId = id;
+    document.querySelectorAll(".media-bar").forEach(b => b.classList.toggle("is-selected", b.dataset.id === id));
+    document.querySelectorAll(".media-item-row").forEach(r => r.classList.toggle("is-selected", r.dataset.id === id));
 
     isDragging = true;
     let type = "media-move";
@@ -2682,9 +2927,48 @@ function onTimelinePointerDown(e) {
       startX: getPointerClientX(e),
       initialStart: m.start || 0,
       initialEnd: m.end || d,
+      initialOffset: m.media_offset || 0,
       item: m,
-      el: mediaBar
+      el: mediaBar,
+      targets: getSnapTargets(id)
     };
+    e.preventDefault();
+    return;
+  }
+
+  // 3. Marcador de Corte na Faixa Principal (Flag Vermelha)
+  const cutFlag = e.target.closest(".trk b.flag");
+  if (cutFlag) {
+    const idx = parseInt(cutFlag.dataset.idx, 10);
+    if (!isNaN(idx) && S.cuts[idx] !== undefined) {
+      isDragging = true;
+      dragInfo = {
+        type: "cut-move",
+        cutIndex: idx,
+        initialTime: S.cuts[idx],
+        startX: getPointerClientX(e),
+        el: cutFlag
+      };
+      e.preventDefault();
+      return;
+    }
+  }
+
+  // 4. Eixo de Visualização (Playhead / Agulha / Scrubber) contínuo
+  const phEl = e.target.closest("#ph") || e.target.closest(".ph-head");
+  const rulerEl = e.target.closest(".ruler");
+  const tlEl = e.target.closest("#tl");
+  if (phEl || rulerEl || (tlEl && !e.target.closest(".sc i") && !e.target.closest(".subs i") && !e.target.closest(".mu i"))) {
+    isDragging = true;
+    dragInfo = { type: "scrub" };
+    const ph = $("#ph");
+    if (ph) ph.classList.add("is-scrubbing");
+    const tlContainer = $("#tl");
+    if (tlContainer) {
+      const x = getPointerClientX(e) - tlContainer.getBoundingClientRect().left;
+      const targetTime = Math.max(0, Math.min(d, x / pps));
+      scrubToTime(targetTime);
+    }
     e.preventDefault();
     return;
   }
@@ -2696,6 +2980,50 @@ function onTimelinePointerMove(e) {
   const d = S.dur || 10;
   const clientX = getPointerClientX(e);
   const dx = (clientX - dragInfo.startX) / pps;
+
+  if (dragInfo.type === "scrub") {
+    const tlContainer = $("#tl");
+    if (tlContainer) {
+      const x = clientX - tlContainer.getBoundingClientRect().left;
+      const targetTime = Math.max(0, Math.min(d, x / pps));
+      scrubToTime(targetTime);
+    }
+    return;
+  }
+
+  if (dragInfo.type === "cut-move") {
+    let newTime = Math.max(0, Math.min(d, dragInfo.initialTime + dx));
+    let guideX = null;
+    if (S.snapEnabled && !e.shiftKey) {
+      const snap = snapTime(newTime, getSnapTargets(), 10);
+      if (snap.snapped) {
+        newTime = snap.time;
+        guideX = newTime * pps;
+      }
+    }
+    newTime = Math.round(newTime * 100) / 100;
+    const oldTime = S.cuts[dragInfo.cutIndex];
+    const delta = newTime - oldTime;
+    S.cuts[dragInfo.cutIndex] = newTime;
+    dragInfo.initialTime = newTime;
+    dragInfo.startX = clientX;
+
+    // Se houver mídias vinculadas a este corte, move-as em conjunto
+    if (S.mediaItems && S.mediaItems.length) {
+      S.mediaItems.forEach(m => {
+        if (m.linked && Math.abs(m.linkedSceneStart - oldTime) < 0.25) {
+          m.start = Math.max(0, Math.round((m.start + delta) * 100) / 100);
+          m.end = Math.max(m.start + 0.5, Math.round((m.end + delta) * 100) / 100);
+          m.linkedSceneStart = newTime;
+        }
+      });
+    }
+
+    dragInfo.el.style.left = (newTime * pps) + "px";
+    showSnapGuide(guideX);
+    scrubToTime(newTime);
+    return;
+  }
 
   if (dragInfo.type.startsWith("hl-")) {
     let targetSeekTime = null;
@@ -2735,52 +3063,114 @@ function onTimelinePointerMove(e) {
 
     // Sincroniza o player no momento do corte/ajuste para preview instantâneo
     if (targetSeekTime !== null) {
-      const pvFull = $("#pvRenderedFull");
-      if (pv && !pv.paused) pv.pause();
-      if (pv) pv.currentTime = targetSeekTime;
-      if (pvFull) pvFull.currentTime = targetSeekTime;
-      if (prevPlayer) prevPlayer.currentTime = targetSeekTime;
-      highlightActiveSegment(targetSeekTime, false);
+      scrubToTime(targetSeekTime);
     }
-
     updateHeadlineOverlay(targetSeekTime !== null ? targetSeekTime : (pv ? pv.currentTime : 0));
   } else if (dragInfo.type.startsWith("media-")) {
     const m = dragInfo.item;
     if (!m) return;
 
+    let guideX = null;
+
     if (dragInfo.type === "media-move") {
       const dur = dragInfo.initialEnd - dragInfo.initialStart;
-      let newStart = Math.max(0, Math.min(d - dur, dragInfo.initialStart + dx));
-      m.start = Math.round(newStart * 10) / 10;
-      m.end = Math.round((newStart + dur) * 10) / 10;
+      let rawStart = Math.max(0, Math.min(d - dur, dragInfo.initialStart + dx));
+      let rawEnd = rawStart + dur;
+
+      let finalStart = rawStart;
+      if (S.snapEnabled && !e.shiftKey) {
+        const snapStart = snapTime(rawStart, dragInfo.targets, 10);
+        const snapEnd = snapTime(rawEnd, dragInfo.targets, 10);
+
+        if (snapStart.snapped) {
+          finalStart = snapStart.time;
+          guideX = finalStart * pps;
+        } else if (snapEnd.snapped) {
+          finalStart = Math.max(0, snapEnd.time - dur);
+          guideX = snapEnd.time * pps;
+        }
+      }
+
+      finalStart = Math.round(finalStart * 100) / 100;
+      m.start = finalStart;
+      m.end = Math.round((finalStart + dur) * 100) / 100;
+
+      if (m.linked) {
+        m.linkedOffset = Math.max(0, Math.round((m.start - (m.linkedSceneStart || 0)) * 100) / 100);
+      }
     } else if (dragInfo.type === "media-resize-l") {
-      let newStart = Math.max(0, Math.min(dragInfo.initialEnd - 0.5, dragInfo.initialStart + dx));
-      m.start = Math.round(newStart * 10) / 10;
+      let rawStart = Math.max(0, Math.min(dragInfo.initialEnd - 0.2, dragInfo.initialStart + dx));
+      if (S.snapEnabled && !e.shiftKey) {
+        const snap = snapTime(rawStart, dragInfo.targets, 10);
+        if (snap.snapped && snap.time < dragInfo.initialEnd - 0.2) {
+          rawStart = snap.time;
+          guideX = rawStart * pps;
+        }
+      }
+      rawStart = Math.round(rawStart * 100) / 100;
+      const delta = rawStart - dragInfo.initialStart;
+      m.start = rawStart;
+      if (!m.is_img) {
+        m.media_offset = Math.max(0, Math.round(((dragInfo.initialOffset || 0) + delta) * 100) / 100);
+      }
     } else if (dragInfo.type === "media-resize-r") {
-      let newEnd = Math.max(dragInfo.initialStart + 0.5, Math.min(d, dragInfo.initialEnd + dx));
-      m.end = Math.round(newEnd * 10) / 10;
+      let rawEnd = Math.max(dragInfo.initialStart + 0.2, Math.min(d, dragInfo.initialEnd + dx));
+      if (S.snapEnabled && !e.shiftKey) {
+        const snap = snapTime(rawEnd, dragInfo.targets, 10);
+        if (snap.snapped && snap.time > dragInfo.initialStart + 0.2) {
+          rawEnd = snap.time;
+          guideX = rawEnd * pps;
+        }
+      }
+      m.end = Math.round(rawEnd * 100) / 100;
     }
+
+    showSnapGuide(guideX);
 
     const bar = dragInfo.el;
     if (bar) {
       bar.style.left = (m.start * pps) + "px";
       bar.style.width = Math.max(20, (m.end - m.start) * pps) + "px";
+      bar.title = `${m.name} (${m.start.toFixed(1)}s - ${m.end.toFixed(1)}s)`;
     }
+
+    // Atualiza os inputs numéricos na lista caso visíveis
+    const row = document.querySelector(`.media-item-row[data-id="${m.id}"]`);
+    if (row) {
+      const sInp = row.querySelector('input[data-k="start"]');
+      const eInp = row.querySelector('input[data-k="end"]');
+      if (sInp) sInp.value = m.start;
+      if (eInp) eInp.value = m.end;
+    }
+
+    // PREVIEW EM TEMPO REAL: resposta visual 100% instantânea no canvas durante o arrasto
+    const curTime = (pv ? pv.currentTime : 0);
+    updateMediaPreviewAtTime(curTime);
   }
 }
 
 function onTimelinePointerUp() {
+  showSnapGuide(null);
+  const ph = $("#ph");
+  if (ph) ph.classList.remove("is-scrubbing");
+
   if (isDragging) {
-    if (dragInfo && dragInfo.type && dragInfo.type.startsWith("media-")) {
-      renderMediaLists();
-    }
-    if (dragInfo && dragInfo.type && dragInfo.type.startsWith("hl-")) {
-      drawTL();
-      const pvCam = $("#pv");
-      updateHeadlineOverlay(pvCam ? pvCam.currentTime : 0);
-    }
-    if (dragInfo && dragInfo.el) {
-      dragInfo.el.style.cursor = "grab";
+    if (dragInfo && dragInfo.type) {
+      if (dragInfo.type.startsWith("media-")) {
+        renderMediaLists();
+        updateMediaPreviewAtTime(pv ? pv.currentTime : 0);
+      } else if (dragInfo.type.startsWith("hl-")) {
+        drawTL();
+        const pvCam = $("#pv");
+        updateHeadlineOverlay(pvCam ? pvCam.currentTime : 0);
+      } else if (dragInfo.type === "cut-move") {
+        S.cuts.sort((a, b) => a - b);
+        drawTL();
+        renderMediaLists();
+      }
+      if (dragInfo.el) {
+        dragInfo.el.style.cursor = "grab";
+      }
     }
     isDragging = false;
     dragInfo = null;
@@ -2832,6 +3222,48 @@ if (markerBtn) {
   };
 }
 
+const btnSplitMedia = $("#btnSplitMedia");
+if (btnSplitMedia) {
+  btnSplitMedia.onclick = () => {
+    const curTime = (pv ? pv.currentTime : 0);
+    splitMediaItem(S.selectedMediaId, curTime);
+  };
+}
+
+const btnToggleSnap = $("#btnToggleSnap");
+if (btnToggleSnap) {
+  btnToggleSnap.onclick = () => {
+    S.snapEnabled = !S.snapEnabled;
+    btnToggleSnap.classList.toggle("on", S.snapEnabled);
+    const hint = $("#visualReRenderStatus");
+    if (hint) {
+      hint.textContent = S.snapEnabled ? "🧲 Atração magnética ativada" : "Atração magnética desativada";
+      setTimeout(() => { if (hint) hint.textContent = ""; }, 2000);
+    }
+  };
+}
+
+// ATALHOS DE TECLADO: Barra de Espaço (Play/Pause), S / C (Corte de Mídia), Delete (Excluir Selecionado)
+document.addEventListener("keydown", e => {
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  if (tag === "input" || tag === "textarea" || (e.target && e.target.isContentEditable)) return;
+
+  if (e.code === "Space") {
+    e.preventDefault();
+    if (playBtn) playBtn.click();
+  } else if (e.key === "s" || e.key === "S" || e.key === "c" || e.key === "C") {
+    e.preventDefault();
+    const curTime = (pv ? pv.currentTime : 0);
+    splitMediaItem(S.selectedMediaId, curTime);
+  } else if (e.key === "Delete" || e.key === "Backspace") {
+    if (S.selectedMediaId) {
+      e.preventDefault();
+      removeMediaItem(S.selectedMediaId);
+      S.selectedMediaId = null;
+    }
+  }
+});
+
 const zoomInput = $("#zoom");
 if (zoomInput) {
   zoomInput.oninput = e => {
@@ -2859,11 +3291,11 @@ if (fitBtn) {
   const v = isRenderedView ? (pvFull || pv) : (pv || prevPlayer);
   const ph = $("#ph");
   if (v) {
-    if (ph) ph.style.left = (v.currentTime * S.pps) + "px";
+    if (ph && !isDragging) ph.style.left = (v.currentTime * S.pps) + "px";
     const clk = $("#clock");
-    if (clk) clk.textContent = `${fmt(v.currentTime)} / ${fmt(v.duration || S.dur || 0)}`;
+    if (clk && !isDragging) clk.textContent = `${fmt(v.currentTime)} / ${fmt(v.duration || S.dur || 0)}`;
     if (playBtn) playBtn.textContent = v.paused ? "▶" : "❚❚";
-    if (!isRenderedView) {
+    if (!isRenderedView && !isDragging) {
       updateMediaPreviewAtTime(v.currentTime);
       updateSubtitleOverlayAtTime(v.currentTime);
       updateHeadlineOverlay(v.currentTime);
