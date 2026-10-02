@@ -6,8 +6,13 @@ Sem chamadas de API paga: transcrição via Whisper local, tudo mais via FFmpeg/
 import os
 import re
 import struct
+import json
+import math
+import time
 import subprocess
 import uuid
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 # Garante detecção automática de ffmpeg/ffprobe via static_ffmpeg ou PATH do Mac
@@ -28,8 +33,13 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 OUTPUT_DIR = BASE_DIR / "output"
 TMP_DIR = BASE_DIR / "tmp"
 FONTS_DIR = BASE_DIR / "fonts"
-for d in (UPLOAD_DIR, OUTPUT_DIR, TMP_DIR, FONTS_DIR):
-    d.mkdir(exist_ok=True)
+ASSETS_DIR = BASE_DIR / "static" / "assets"
+SFX_DIR = ASSETS_DIR / "sfx"
+LOTTIE_DIR = ASSETS_DIR / "lottie"
+OVERLAYS_DIR = ASSETS_DIR / "overlays"
+
+for d in (UPLOAD_DIR, OUTPUT_DIR, TMP_DIR, FONTS_DIR, ASSETS_DIR, SFX_DIR, LOTTIE_DIR, OVERLAYS_DIR):
+    d.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2GB
@@ -197,6 +207,9 @@ def build_tracking_crop_expr(points, src_w, src_h, out_ratio=1080 / 1920):
 CAPTION_STYLES = {
     "hormozi": dict(font="Arial Black", size=16, primary="&H0000FFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=4, upper=True),
     "karaoke_ciano": dict(font="Arial Black", size=15, primary="&H00D2B400", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=3.5, upper=True),
+    "pop_in": dict(font="Arial Black", size=16, primary="&H0000FFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=4, upper=True),
+    "karaoke_highlight": dict(font="Arial Black", size=16, primary="&H0032CD32", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=4, upper=True),
+    "active_box": dict(font="Arial Black", size=15, primary="&H00FFFFFF", sec="&H00000000", outline_c="&H00006AFF", bold=-1, bs=3, outline=12, upper=True),
     "karaoke_neon": dict(font="Arial Black", size=15, primary="&H00D2B400", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=3.5, upper=True),
     "destaque": dict(font="Arial Black", size=15, primary="&H00FFFFFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=3, upper=True),
     "karaoke": dict(font="Arial Black", size=15, primary="&H00006AFF", sec="&H00FFFFFF", outline_c="&H00000000", bold=-1, bs=1, outline=3, upper=True),
@@ -316,8 +329,8 @@ def map_time_after_cuts(orig_t, effective_silences):
 
 def chunk_words(words, max_words=2, max_duration=1.0):
     """
-    Agrupa palavras individuais em blocos curtos e dinâmicos (1 a 2 palavras por tela).
-    Evita sobrecarga visual e melhora a leitura dinâmica.
+    Agrupa palavras individuais em micro-blocos de alto impacto (máximo 2 palavras por tela).
+    Garante alta retenção em formato de vídeo vertical (Reels/TikTok).
     """
     if not words:
         return []
@@ -474,7 +487,7 @@ def build_ass_subtitles(segments, style="destaque", out_path=None, karaoke=False
                             "end": round(seg["start"] + (idx + 1) * step, 2)
                         })
 
-    # Divide em chunks virais curtos (1 a 2 palavras por tela) posicionados no canvas
+    # Divide em micro-blocos virais curtos (1 a 2 palavras por tela) posicionados no canvas
     chunks = chunk_words(all_words, max_words=2, max_duration=1.0)
     for chunk in chunks:
         c_start = chunk[0]["start"]
@@ -594,6 +607,432 @@ def transcribe():
         words = [{"word": w.word, "start": round(w.start, 2), "end": round(w.end, 2)} for w in (seg.words or [])]
         result.append({"start": round(seg.start, 2), "end": round(seg.end, 2), "text": seg.text.strip(), "words": words})
     return jsonify({"segments": result})
+
+
+def call_ollama(prompt, system_prompt="", model="llama3.1", format_json=False, timeout=3):
+    """Tenta consultar o Ollama local (se instalado e ativo em localhost:11434)."""
+    try:
+        url = "http://localhost:11434/api/chat"
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "stream": False
+        }
+        if format_json:
+            payload["format"] = "json"
+        data_bytes = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data_bytes, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            res_json = json.loads(resp.read().decode("utf-8"))
+            return res_json.get("message", {}).get("content", "").strip()
+    except Exception:
+        return None
+
+
+def heuristic_edit_brain(segments, duration):
+    """
+    Motor Heurístico de Alta Performance para Edição Automática (Zero Tokens).
+    Gera Headlines virais magnéticas, ênfases de zoom, sugestões de B-roll e marcadores de SFX.
+    """
+    all_words = []
+    full_text = ""
+    for s in segments:
+        full_text += " " + s.get("text", "")
+        for w in (s.get("words") or []):
+            all_words.append(w)
+
+    full_text = full_text.strip()
+    words_list = full_text.split()
+
+    # 1. Sugestões de Headlines virais (máx 6 palavras)
+    headlines = []
+    hook_phrase = " ".join(words_list[:6]).upper() if words_list else ""
+    if hook_phrase:
+        headlines.append(hook_phrase)
+
+    lower_text = full_text.lower()
+    if any(k in lower_text for k in ["segredo", "ninguém", "revelado", "verdade"]):
+        headlines.append("O SEGREDO QUE NINGUÉM CONTA")
+    elif any(k in lower_text for k in ["dinheiro", "vendas", "faturar", "ganhar"]):
+        headlines.append("COMO MULTIPLICAR SEUS GANHOS")
+    elif any(k in lower_text for k in ["erro", "errado", "cuidado", "pare"]):
+        headlines.append("PARE DE FAZER ISSO AGORA")
+    else:
+        headlines.append("ASSISTA ANTES QUE SEJA TARDE")
+
+    headlines.append("O PASSO A PASSO DEFINITIVO")
+    clean_hl = []
+    for h in headlines:
+        h_clean = " ".join(h.split()[:6])
+        if h_clean not in clean_hl:
+            clean_hl.append(h_clean)
+        if len(clean_hl) == 3:
+            break
+    while len(clean_hl) < 3:
+        clean_hl.append(f"ATENÇÃO MÁXIMA AQUI #{len(clean_hl)+1}")
+
+    # 2. Momentos-chave para Zoom de Ênfase (punch-in alternado)
+    emphasis_keywords = {
+        "nunca", "segredo", "atenção", "dinheiro", "importante", "erro", "ganhar",
+        "urgente", "fazer", "cuidado", "dica", "chave", "resultado", "evite", "melhor",
+        "top", "fácil", "rápido", "transformar", "olha", "veja", "escuta", "foco"
+    }
+    emphasis_zooms = []
+    for w in all_words:
+        w_clean = re.sub(r"[^\w]", "", w.get("word", "")).lower()
+        if w_clean in emphasis_keywords:
+            t = float(w.get("start", 0.0))
+            if not any(abs(ez["time"] - t) < 2.0 for ez in emphasis_zooms):
+                emphasis_zooms.append({
+                    "time": round(t, 2),
+                    "word": w.get("word", ""),
+                    "zoom": 1.18,
+                    "duration": 0.8
+                })
+        if len(emphasis_zooms) >= 5:
+            break
+
+    # 3. Sugestões de B-roll (40% de tela dividida)
+    brolls = []
+    if duration > 6.0:
+        b1_start = round(min(duration * 0.22, 3.0), 2)
+        b1_end = round(min(b1_start + 4.0, duration * 0.45), 2)
+        brolls.append({"start": b1_start, "end": b1_end, "reason": "Apoio visual à introdução"})
+
+        if duration > 12.0:
+            b2_start = round(duration * 0.55, 2)
+            b2_end = round(min(b2_start + 4.5, duration - 1.0), 2)
+            brolls.append({"start": b2_start, "end": b2_end, "reason": "Ilustração do clímax do conteúdo"})
+
+    # 4. Sugestões de Marcadores de SFX
+    sfx_suggestions = []
+    # Inicia com whoosh curto no gancho inicial
+    sfx_suggestions.append({"time": 0.0, "sfx_id": "whoosh_curto", "name": "Whoosh Curto", "volume": 0.8})
+
+    for ez in emphasis_zooms[:3]:
+        sfx_suggestions.append({
+            "time": ez["time"],
+            "sfx_id": "ding" if any(k in ez["word"].lower() for k in ["dinheiro", "ganhar"]) else "pop",
+            "name": "Ding" if any(k in ez["word"].lower() for k in ["dinheiro", "ganhar"]) else "Pop Rápido",
+            "volume": 0.75
+        })
+
+    for br in brolls:
+        sfx_suggestions.append({
+            "time": br["start"],
+            "sfx_id": "swoosh",
+            "name": "Swoosh Dinâmico",
+            "volume": 0.7
+        })
+
+    return {
+        "headlines": clean_hl,
+        "emphasis_zooms": emphasis_zooms,
+        "brolls": brolls,
+        "sfx": sfx_suggestions
+    }
+
+
+def heuristic_copilot(message, current_state=None):
+    """
+    Motor Heurístico de Intenções para Copilot Local (Zero Tokens).
+    Processa comandos de texto ou voz e mapeia diretamente para ações do editor.
+    """
+    msg = (message or "").lower().strip()
+    actions = []
+    reply = "Comando processado com sucesso!"
+
+    if any(k in msg for k in ["corte silêncio", "cortar silêncio", "corta silêncio", "respiro", "respiros", "pausa", "pausas", "silêncios"]):
+        if any(k in msg for k in ["desativ", "desliga", "tirar", "remover corte", "cancela"]):
+            actions.append({"type": "cut_silence", "enabled": False})
+            reply = "Corte automático de silêncios desativado."
+        else:
+            actions.append({"type": "cut_silence", "enabled": True})
+            reply = "Corte automático de respiros e silêncios ativado! Os vazios foram removidos da timeline."
+
+    elif any(k in msg for k in ["texto atrás", "atrás de mim", "depth", "profundidade", "efeito 3d"]):
+        if any(k in msg for k in ["desativ", "desliga", "tirar", "remover"]):
+            actions.append({"type": "depth_text", "enabled": False})
+            reply = "Efeito de texto atrás de mim (3D Depth) desativado."
+        else:
+            actions.append({"type": "depth_text", "enabled": True})
+            reply = "Efeito 3D Depth ('Texto Atrás de Mim') ativado! A pessoa agora sobrepõe a headline."
+
+    elif any(k in msg for k in ["desfaça", "desfazer", "volte atrás", "voltar", "reverter", "undo"]):
+        actions.append({"type": "undo"})
+        reply = "Última alteração desfeita com sucesso!"
+
+    elif any(k in msg for k in ["legenda", "subtítulo", "subtitulo"]):
+        if any(k in msg for k in ["desativ", "desliga", "tirar", "sem legenda", "nenhuma", "remover"]):
+            actions.append({"type": "subtitle_style", "style": "nenhuma", "disabled": True})
+            reply = "Legendas desativadas para um vídeo com visual limpo."
+        elif "pop" in msg:
+            actions.append({"type": "subtitle_style", "style": "pop_in"})
+            reply = "Estilo de legenda alterado para Pop In com animação elástica palavra por palavra."
+        elif "karaokê" in msg or "karaoke" in msg:
+            if "neon" in msg:
+                actions.append({"type": "subtitle_style", "style": "karaoke_neon"})
+                reply = "Estilo de legenda alterado para Karaokê Neon."
+            else:
+                actions.append({"type": "subtitle_style", "style": "karaoke_highlight"})
+                reply = "Estilo de legenda alterado para Karaokê com destaque instantâneo."
+        elif "hormozi" in msg:
+            actions.append({"type": "subtitle_style", "style": "hormozi"})
+            reply = "Estilo de legenda alterado para Hormozi Viral."
+        elif "box" in msg or "caixa" in msg:
+            actions.append({"type": "subtitle_style", "style": "active_box"})
+            reply = "Estilo de legenda alterado para Active Box."
+        elif "luxo" in msg or "serif" in msg:
+            actions.append({"type": "subtitle_style", "style": "serif_luxo"})
+            reply = "Estilo de legenda alterado para Serifada Luxo."
+        elif "aument" in msg or "maior" in msg:
+            actions.append({"type": "subtitle_scale_step", "delta": 15})
+            reply = "Tamanho da legenda aumentado em 15%."
+        elif "diminu" in msg or "menor" in msg:
+            actions.append({"type": "subtitle_scale_step", "delta": -15})
+            reply = "Tamanho da legenda reduzido em 15%."
+        else:
+            if "amarel" in msg:
+                actions.append({"type": "subtitle_color", "color": "#facc15"})
+                reply = "Cor da legenda alterada para amarelo brilhante."
+            elif "verd" in msg:
+                actions.append({"type": "subtitle_color", "color": "#22c55e"})
+                reply = "Cor da legenda alterada para verde neon."
+            elif "vermelh" in msg:
+                actions.append({"type": "subtitle_color", "color": "#ef4444"})
+                reply = "Cor da legenda alterada para vermelho vibrante."
+            elif "azul" in msg or "ciano" in msg:
+                actions.append({"type": "subtitle_color", "color": "#06b6d4"})
+                reply = "Cor da legenda alterada para ciano."
+            else:
+                actions.append({"type": "subtitle_style", "style": "hormozi"})
+                reply = "Legenda ajustada para estilo viral de alta retenção."
+
+    elif any(k in msg for k in ["som", "sfx", "áudio", "audio", "whoosh", "ding", "pop", "boom", "swoosh"]):
+        sfx_target = "whoosh_curto"
+        if "ding" in msg: sfx_target = "ding"
+        elif "boom" in msg or "impacto" in msg: sfx_target = "boom"
+        elif "pop" in msg: sfx_target = "pop"
+        elif "swoosh" in msg: sfx_target = "swoosh"
+        elif "caixa" in msg or "dinheiro" in msg: sfx_target = "cash_register"
+        elif "riser" in msg or "tensão" in msg: sfx_target = "riser"
+        elif "erro" in msg or "buzzer" in msg: sfx_target = "buzzer_error"
+        actions.append({"type": "add_sfx", "sfx_id": sfx_target})
+        reply = f"Efeito sonoro '{sfx_target}' inserido na posição atual!"
+
+    elif any(k in msg for k in ["seta", "círculo", "circulo", "check", "erro", "alerta", "lottie", "sticker"]):
+        lottie_target = "arrow_pointing"
+        if "circulo" in msg or "círculo" in msg: lottie_target = "circle_highlight"
+        elif "check" in msg or "verde" in msg: lottie_target = "check_green"
+        elif "x" in msg or "erro" in msg: lottie_target = "x_red"
+        elif "alerta" in msg or "aviso" in msg: lottie_target = "alert_icon"
+        actions.append({"type": "add_lottie", "lottie_id": lottie_target})
+        reply = f"Elemento gráfico '{lottie_target}' adicionado na tela!"
+
+    elif any(k in msg for k in ["headline", "título", "titulo", "gerar headline", "ideias"]):
+        actions.append({"type": "generate_headlines"})
+        reply = "Gerando sugestões magnéticas de headline baseadas na transcrição..."
+
+    elif any(k in msg for k in ["volume", "trilha", "música", "musica"]):
+        vol_match = re.search(r"(\d+)%", msg)
+        vol = (int(vol_match.group(1)) / 100.0) if vol_match else 0.15
+        actions.append({"type": "music_volume", "volume": vol})
+        reply = f"Volume da trilha sonora ajustado para {int(vol * 100)}%."
+
+    elif any(k in msg for k in ["tela dividida", "split", "60/40", "40/60"]):
+        tipo = "dividida" if "40/60" in msg else "dividida2"
+        actions.append({"type": "set_tipo", "tipo": tipo})
+        reply = "Layout de visualização alterado para tela dividida."
+
+    elif any(k in msg for k in ["tela única", "tela cheia", "completa", "única"]):
+        actions.append({"type": "set_tipo", "tipo": "unica"})
+        reply = "Layout ajustado para tela única (100% apresentador)."
+
+    else:
+        reply = f"Entendi: '{message}'. Aplicando otimização visual no editor."
+        actions.append({"type": "smart_optimize"})
+
+    return {"reply": reply, "actions": actions}
+
+
+@app.route("/api/assets", methods=["GET"])
+def get_assets():
+    sfx_manifest = [
+        {"id": "whoosh_curto", "name": "Whoosh Curto", "category": "Transição", "file": "whoosh_curto.wav"},
+        {"id": "whoosh_medio", "name": "Whoosh Médio", "category": "Transição", "file": "whoosh_medio.wav"},
+        {"id": "whoosh_grave", "name": "Whoosh Grave", "category": "Impacto", "file": "whoosh_grave.wav"},
+        {"id": "swoosh", "name": "Swoosh Dinâmico", "category": "Transição", "file": "swoosh.wav"},
+        {"id": "pop", "name": "Pop Rápido", "category": "Surgimento", "file": "pop.wav"},
+        {"id": "click", "name": "Click / Tecla", "category": "Interface", "file": "click.wav"},
+        {"id": "bubble", "name": "Bubble / Bolha", "category": "Surgimento", "file": "bubble.wav"},
+        {"id": "typing", "name": "Digitação", "category": "Texto", "file": "typing.wav"},
+        {"id": "boom", "name": "Boom / Impacto", "category": "Impacto", "file": "boom.wav"},
+        {"id": "riser", "name": "Riser / Tensão", "category": "Tensão", "file": "riser.wav"},
+        {"id": "ding", "name": "Ding / Acerto", "category": "Destaque", "file": "ding.wav"},
+        {"id": "cash_register", "name": "Caixa Registradora", "category": "Destaque", "file": "cash_register.wav"},
+        {"id": "buzzer_error", "name": "Buzzer / Erro", "category": "Alerta", "file": "buzzer_error.wav"},
+    ]
+    for item in sfx_manifest:
+        item["url"] = f"/static/assets/sfx/{item['file']}"
+
+    lottie_manifest = [
+        {"id": "arrow_pointing", "name": "Seta Apontando", "category": "Atenção", "file": "arrow_pointing.json"},
+        {"id": "circle_highlight", "name": "Círculo Destaque", "category": "Ênfase", "file": "circle_highlight.json"},
+        {"id": "check_green", "name": "Check Verde", "category": "Sucesso", "file": "check_green.json"},
+        {"id": "x_red", "name": "X Vermelho", "category": "Erro", "file": "x_red.json"},
+        {"id": "alert_icon", "name": "Ícone Alerta", "category": "Aviso", "file": "alert_icon.json"},
+    ]
+    for item in lottie_manifest:
+        item["url"] = f"/static/assets/lottie/{item['file']}"
+
+    overlays = []
+    manifest_p = OVERLAYS_DIR / "manifest.json"
+    if manifest_p.exists():
+        try:
+            raw = json.loads(manifest_p.read_text(encoding="utf-8"))
+            for k, v in raw.items():
+                overlays.append({
+                    "id": k,
+                    "name": v.get("name", k),
+                    "blend_mode": v.get("blend", "screen"),
+                    "opacity": v.get("opacity", 0.5)
+                })
+        except Exception:
+            pass
+
+    return jsonify({
+        "sfx": sfx_manifest,
+        "lottie": lottie_manifest,
+        "overlays": overlays
+    })
+
+
+@app.route("/api/detect_silences", methods=["POST"])
+def api_detect_silences():
+    data = request.json or {}
+    video_id = data.get("video_id")
+    p = find_upload(video_id)
+    if not p:
+        return jsonify({"error": "Vídeo não encontrado"}), 404
+
+    noise_db = data.get("noise_db")
+    if noise_db is not None:
+        noise_db = float(noise_db)
+    min_duration = float(data.get("min_duration", 0.22))
+
+    dur = ffprobe_duration(p)
+    raw_silences = detect_silences(p, noise_db=noise_db, min_duration=min_duration)
+    speech_intervals, effective_silences = compute_speech_intervals(dur, raw_silences, pad=0.04)
+
+    total_silence = sum(e - s for s, e in effective_silences)
+
+    return jsonify({
+        "duration": dur,
+        "raw_silences": [{"start": round(s, 2), "end": round(e, 2), "duration": round(e - s, 2)} for s, e in raw_silences],
+        "effective_silences": [{"start": round(s, 2), "end": round(e, 2), "duration": round(e - s, 2)} for s, e in effective_silences],
+        "speech_intervals": [{"start": round(s, 2), "end": round(e, 2)} for s, e in speech_intervals],
+        "total_silence_duration": round(total_silence, 2),
+        "silence_cut_count": len(effective_silences)
+    })
+
+
+@app.route("/api/ai/edit_brain", methods=["POST"])
+def ai_edit_brain():
+    data = request.json or {}
+    video_id = data.get("video_id")
+    p = find_upload(video_id)
+    if not p:
+        return jsonify({"error": "Vídeo não encontrado"}), 404
+
+    dur = ffprobe_duration(p)
+    segments = data.get("segments") or []
+
+    # Tenta Ollama local primeiro se disponível
+    ollama_result = None
+    if segments:
+        full_transcript = " ".join(s.get("text", "") for s in segments)
+        prompt = (
+            f"Analise esta transcrição para Reels/TikTok:\n\"{full_transcript}\"\n"
+            f"Duração: {dur:.1f}s. Sugira 3 headlines virais magnéticas curtas (máx 6 palavras em maiúsculas), "
+            f"momentos de ênfase para zoom punch-in, cortes de B-roll e efeitos sonoros SFX. Responda em JSON: "
+            f'{{"headlines": ["..."], "emphasis_zooms": [{{"time": 0.0, "word": "...", "zoom": 1.2}}], "brolls": [], "sfx": []}}'
+        )
+        ollama_resp = call_ollama(prompt, system_prompt="Você é um editor viral de alta retenção.", format_json=True, timeout=2.5)
+        if ollama_resp:
+            try:
+                ollama_result = json.loads(ollama_resp)
+            except Exception:
+                ollama_result = None
+
+    if ollama_result and "headlines" in ollama_result:
+        return jsonify(ollama_result)
+
+    # Heurística local de alta precisão (Zero Tokens)
+    heuristic_res = heuristic_edit_brain(segments, dur)
+    return jsonify(heuristic_res)
+
+
+@app.route("/api/ai/copilot", methods=["POST"])
+def ai_copilot():
+    data = request.json or {}
+    message = data.get("message", "")
+    current_state = data.get("current_state", {})
+
+    # Tenta Ollama local se configurado
+    ollama_resp = call_ollama(
+        f"Comando do usuário para o editor de vídeo: '{message}'. Mapeie em JSON com {{reply: '...', actions: [...]}}",
+        system_prompt="Você é o Copilot de edição de vídeo do Edvid.",
+        format_json=True,
+        timeout=2.0
+    )
+    if ollama_resp:
+        try:
+            parsed = json.loads(ollama_resp)
+            if "actions" in parsed:
+                return jsonify(parsed)
+        except Exception:
+            pass
+
+    # Heurística local determinística e instantânea
+    res = heuristic_copilot(message, current_state)
+    return jsonify(res)
+
+
+@app.route("/api/voice_command", methods=["POST"])
+def voice_command():
+    file = request.files.get("audio") or request.files.get("file")
+    if not file:
+        return jsonify({"error": "Nenhum arquivo de áudio enviado"}), 400
+
+    ext = Path(file.filename).suffix or ".webm"
+    temp_id = uuid.uuid4().hex[:10]
+    in_path = TMP_DIR / f"voice_{temp_id}{ext}"
+    wav_path = TMP_DIR / f"voice_{temp_id}.wav"
+    file.save(in_path)
+
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-i", str(in_path),
+            "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le",
+            str(wav_path)
+        ], capture_output=True, timeout=10, check=True)
+        target_path = wav_path if wav_path.exists() else in_path
+    except Exception:
+        target_path = in_path
+
+    model = get_whisper_model()
+    segments, info = model.transcribe(str(target_path), language="pt")
+    transcript = " ".join(s.text for s in segments).strip()
+
+    in_path.unlink(missing_ok=True)
+    wav_path.unlink(missing_ok=True)
+
+    res = heuristic_copilot(transcript)
+    res["transcript"] = transcript
+    return jsonify(res)
 
 
 @app.route("/upload_media", methods=["POST"])
@@ -759,6 +1198,7 @@ def export():
     tracking = bool(data.get("tracking"))
     music_id = data.get("music_id")
     music_volume = float(data.get("music_volume", 0.15))
+    sfx_items = data.get("sfx_items") or []
 
     job_id = uuid.uuid4().hex[:10]
     job_tmp = TMP_DIR / job_id
@@ -1100,22 +1540,52 @@ def export():
             if r.returncode == 0:
                 current = captioned
 
-        # --- Passo D: trilha sonora ---
-        if music_id:
-            music_path = find_upload(music_id)
+        # --- Passo D: Trilha sonora de fundo e efeitos sonoros SFX ---
+        valid_sfx = []
+        for item in sfx_items:
+            sid = item.get("sfx_id")
+            if not sid:
+                continue
+            sfx_f = SFX_DIR / f"{sid}.wav"
+            if sfx_f.exists():
+                t = float(item.get("time", 0.0) or 0.0)
+                v = float(item.get("volume", 0.8) or 0.8)
+                if effective_silences:
+                    t = map_time_after_cuts(t, effective_silences)
+                valid_sfx.append({"path": sfx_f, "time": max(0.0, t), "vol": max(0.05, min(2.0, v))})
+
+        music_path = find_upload(music_id) if music_id else None
+
+        if music_path or valid_sfx:
+            audio_inputs = ["-i", str(current)]
+            filter_parts = ["[0:a]volume=1.0[voice]"]
+            mix_sources = ["[voice]"]
+            in_idx = 1
+
             if music_path:
-                cmd = ["ffmpeg", "-y", "-i", str(current), "-i", str(music_path),
-                       "-filter_complex",
-                       f"[0:a]volume=1.0[voice];[1:a]volume={music_volume},aloop=loop=-1:size=2e9[bg];"
-                       f"[voice][bg]amix=inputs=2:duration=first:dropout_transition=2[aout]",
-                       "-map", "0:v", "-map", "[aout]",
-                       "-c:v", "copy", "-c:a", "aac", str(out_path)]
-                r = subprocess.run(cmd, capture_output=True, text=True)
-                if r.returncode != 0:
-                    return jsonify({"error": "Falha ao mixar trilha", "detail": r.stderr[-3000:]}), 500
-            elif current != out_path:
-                subprocess.run(["ffmpeg", "-y", "-i", str(current), "-c", "copy", str(out_path)],
-                                capture_output=True, text=True)
+                audio_inputs.extend(["-i", str(music_path)])
+                filter_parts.append(f"[{in_idx}:a]volume={music_volume},aloop=loop=-1:size=2e9[bg]")
+                mix_sources.append("[bg]")
+                in_idx += 1
+
+            for s_i, s_item in enumerate(valid_sfx):
+                audio_inputs.extend(["-i", str(s_item["path"])])
+                delay_ms = int(round(s_item["time"] * 1000))
+                filter_parts.append(f"[{in_idx}:a]adelay={delay_ms}|{delay_ms},volume={s_item['vol']:.2f}[sfx_{s_i}]")
+                mix_sources.append(f"[sfx_{s_i}]")
+                in_idx += 1
+
+            filter_parts.append(f"{''.join(mix_sources)}amix=inputs={len(mix_sources)}:duration=first:dropout_transition=0[aout]")
+            fc_audio = ";".join(filter_parts)
+
+            cmd = ["ffmpeg", "-y", *audio_inputs,
+                   "-filter_complex", fc_audio,
+                   "-map", "0:v", "-map", "[aout]",
+                   "-c:v", "copy", "-c:a", "aac", str(out_path)]
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            if r.returncode != 0:
+                print("Warning mix audio:", r.stderr[-1000:])
+                subprocess.run(["ffmpeg", "-y", "-i", str(current), "-c", "copy", str(out_path)], capture_output=True)
         elif current != out_path:
             subprocess.run(["ffmpeg", "-y", "-i", str(current), "-c", "copy", str(out_path)],
                             capture_output=True, text=True)

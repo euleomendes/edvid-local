@@ -32,7 +32,12 @@ const S = {
   renderedUrl: null,
   originalUrl: null,
   viewMode: "original",
-  activeDrag: null
+  activeDrag: null,
+  depthText: false,
+  subColor: "#ffffff",
+  sfxItems: [],
+  silenceIntervals: [],
+  activeOverlay: null
 };
 
 const TIPOS = [
@@ -54,6 +59,10 @@ const HLS = [
 const CAPS = [
   ["hormozi", "Hormozi Viral", `<div class="anim-hormozi"><span>VIRAL</span><span>ESTILO</span><span>HORMOZI</span></div>`],
   ["karaoke_ciano", "Karaokê Ciano", `<div class="anim-karaoke-neon"><span>É</span><span>ASSIM</span><span>QUE</span><span>FICA</span></div>`],
+  ["pop_in", "Pop In Elástico", `<div class="anim-pop"><span>MICRO</span><span>BLOCO</span></div>`],
+  ["karaoke_highlight", "Karaokê Destaque", `<div class="anim-karaoke-neon"><span>COR</span><span>INSTANTÂNEA</span></div>`],
+  ["active_box", "Active Box", `<div style="background:#ff6a00;color:#fff;padding:2px 6px;border-radius:4px;font-weight:900;font-size:10px;">CAIXA DINÂMICA</div>`],
+  ["karaoke_neon", "Karaokê Neon", `<div class="anim-karaoke-neon"><span>É</span><span>ASSIM</span><span>QUE</span><span>FICA</span></div>`],
   ["karaoke", "Karaokê Laranja", `<div class="anim-karaoke-orange"><span>É</span><span>ASSIM</span><span>QUE</span></div>`],
   ["verde_limao", "Verde Limão", `<div style="font-family:'Arial Black',Impact,sans-serif;font-weight:900;font-size:11.5px;color:#00ff66;-webkit-text-stroke:0.8px #000;text-transform:uppercase;">VIRAL VERDE</div>`],
   ["rubi_impacto", "Rubi Impacto", `<div style="font-family:Impact,sans-serif;font-weight:900;font-size:12px;color:#ff2a55;-webkit-text-stroke:0.8px #000;text-transform:uppercase;">RUBI IMPACTO</div>`],
@@ -1074,6 +1083,8 @@ async function executeRender(isQuickUpdate = false) {
       tracking: !!S.el.tracking,
       music_id: S.el.music ? S.music : null,
       music_volume: $("#musicVol") ? $("#musicVol").value : 0.15,
+      sfx_items: S.sfxItems || [],
+      depth_text: !!S.depthText
     });
 
     if (r.error) {
@@ -2022,7 +2033,7 @@ function getSubtitleChunks() {
     }
   }
 
-  // Chunker idêntico a chunk_words() no app.py (max_words=2, max_duration=1.0)
+  // Chunker de alta retenção vertical (MÁXIMO 2 palavras por bloco na tela)
   const chunks = [];
   let cur = [];
   for (const w of allWords) {
@@ -2093,6 +2104,11 @@ function updateSubtitleOverlayAtTime(curTime) {
 
   const capStyle = S.cap || "hormozi";
   contentEl.className = "sub-preview-content sub-style-" + capStyle;
+  if (S.subColor && S.subColor !== "#ffffff") {
+    contentEl.style.color = S.subColor;
+  } else {
+    contentEl.style.color = "";
+  }
 
   const chunks = getSubtitleChunks();
   const isKaraokeStyle = ["hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub", "ouro_premium", "azul_royal", "roxo_cyber", "caixa_vermelha"].includes(capStyle);
@@ -2130,7 +2146,6 @@ function updateSubtitleOverlayAtTime(curTime) {
     if (isExactTime) {
       activeIdx = activeChunk.words.findIndex(w => curTime >= w.start && curTime <= w.end);
     }
-    // Se pausado ou antes do início, destaca a primeira palavra como referência WYSIWYG
     if (activeIdx === -1) activeIdx = 0;
 
     const htmlWords = activeChunk.words.map((w, idx) => {
@@ -3284,7 +3299,707 @@ if (fitBtn) {
   };
 }
 
-// LOOP DE ANIMAÇÃO DO PLAYHEAD E CLOCK
+// ========================================================
+// MÓDULO 2: STARTER PACK DE SFX E ÁUDIO SINTÉTICO (ZERO DEPENDÊNCIA)
+// ========================================================
+const SFXEngine = {
+  ctx: null,
+  init() {
+    if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  },
+  play(sfxId, volume = 0.8) {
+    if (!sfxId) return;
+    try {
+      const audio = new Audio(`/static/assets/sfx/${sfxId}.wav`);
+      audio.volume = Math.max(0, Math.min(1, volume));
+      audio.play().catch(() => this.playSynthetic(sfxId, volume));
+    } catch (e) {
+      this.playSynthetic(sfxId, volume);
+    }
+  },
+  playSynthetic(type, volume = 0.5) {
+    try {
+      this.init();
+      if (!this.ctx) return;
+      if (this.ctx.state === "suspended") this.ctx.resume();
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      gain.gain.setValueAtTime(volume * 0.35, now);
+
+      if (type.includes("whoosh") || type === "swoosh") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(type.includes("grave") ? 150 : 360, now);
+        osc.frequency.exponentialRampToValueAtTime(type.includes("grave") ? 60 : 110, now + 0.25);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+        osc.start(now); osc.stop(now + 0.3);
+      } else if (type === "ding" || type === "pop" || type === "bubble") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(type === "ding" ? 1200 : 650, now);
+        if (type === "ding") osc.frequency.setValueAtTime(1600, now + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (type === "ding" ? 0.4 : 0.12));
+        osc.start(now); osc.stop(now + 0.4);
+      } else if (type === "boom") {
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(120, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.6);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+        osc.start(now); osc.stop(now + 0.7);
+      } else if (type === "cash_register") {
+        osc.type = "square";
+        osc.frequency.setValueAtTime(980, now);
+        osc.frequency.setValueAtTime(1400, now + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+        osc.start(now); osc.stop(now + 0.35);
+      } else {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(440, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.start(now); osc.stop(now + 0.18);
+      }
+    } catch (ex) {}
+  },
+  addTimelineItem(sfxId, time, volume = 0.8) {
+    if (!S.sfxItems) S.sfxItems = [];
+    S.sfxItems.push({
+      id: "sfx_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      sfx_id: sfxId,
+      time: Math.round(time * 100) / 100,
+      volume: volume
+    });
+    this.play(sfxId, volume);
+    drawTL();
+  }
+};
+window.SFXEngine = SFXEngine;
+
+// ========================================================
+// MÓDULO 3: 3D DEPTH TEXT ("TEXTO ATRÁS DE MIM")
+// Camadas: Vídeo Base -> Headline (Z=10) -> Apresentador Mascarado (Z=18) -> Legenda (Z=26)
+// ========================================================
+const DepthTextEngine = {
+  segmenter: null,
+  canvas: null,
+  ctx: null,
+  animFrame: null,
+  active: false,
+  initialized: false,
+  init() {
+    if (this.initialized) return;
+    this.canvas = $("#depthCanvas");
+    if (!this.canvas) return;
+    this.ctx = this.canvas.getContext("2d", { willReadFrequently: true });
+    if (window.SelfieSegmentation) {
+      try {
+        this.segmenter = new window.SelfieSegmentation({
+          locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+        });
+        this.segmenter.setOptions({ modelSelection: 1 });
+        this.segmenter.onResults(results => this.onResults(results));
+      } catch (err) {
+        console.warn("MediaPipe selfie segmentation init error:", err);
+      }
+    }
+    this.initialized = true;
+  },
+  onResults(results) {
+    if (!this.active || !this.ctx || !this.canvas) return;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    if (w === 0 || h === 0) return;
+    this.ctx.save();
+    this.ctx.clearRect(0, 0, w, h);
+    this.ctx.drawImage(results.segmentationMask, 0, 0, w, h);
+    this.ctx.globalCompositeOperation = "source-in";
+    this.ctx.drawImage(results.image, 0, 0, w, h);
+    this.ctx.restore();
+  },
+  toggle(enable) {
+    S.depthText = !!enable;
+    const toggleInput = $("#depthTextToggle");
+    if (toggleInput) toggleInput.checked = S.depthText;
+
+    const hlOverlay = $("#hlPreviewOverlay");
+    if (hlOverlay) {
+      hlOverlay.style.zIndex = S.depthText ? "10" : "20";
+    }
+
+    if (S.depthText) {
+      this.init();
+      this.start();
+    } else {
+      this.stop();
+    }
+  },
+  start() {
+    this.active = true;
+    if (this.canvas) this.canvas.style.display = "block";
+    const video = $("#pv");
+    if (!video) return;
+
+    let processing = false;
+    const loop = async () => {
+      if (!this.active) return;
+      if (!video.paused && !video.ended && video.readyState >= 2 && !processing) {
+        if (this.canvas.width !== video.videoWidth && video.videoWidth > 0) {
+          this.canvas.width = video.videoWidth;
+          this.canvas.height = video.videoHeight;
+        }
+        if (this.segmenter && this.canvas.width > 0) {
+          processing = true;
+          try {
+            await this.segmenter.send({ image: video });
+          } catch (e) {}
+          processing = false;
+        } else {
+          this.fallbackRender(video);
+        }
+      }
+      this.animFrame = requestAnimationFrame(loop);
+    };
+    loop();
+  },
+  stop() {
+    this.active = false;
+    if (this.animFrame) cancelAnimationFrame(this.animFrame);
+    if (this.canvas) {
+      this.canvas.style.display = "none";
+      if (this.ctx && this.canvas.width > 0) {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      }
+    }
+  },
+  fallbackRender(video) {
+    if (!this.ctx || !this.canvas || this.canvas.width === 0) return;
+    this.ctx.save();
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.drawImage(video, 0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.restore();
+  }
+};
+window.DepthTextEngine = DepthTextEngine;
+
+// ========================================================
+// MÓDULO 2: OVERLAYS CINEMATOGRÁFICOS (FILM GRAIN, LIGHT LEAKS, ETC)
+// ========================================================
+const OverlaysEngine = {
+  activeId: null,
+  apply(overlayId) {
+    const el = $("#videoOverlayEffect");
+    if (!el) return;
+    if (this.activeId === overlayId) {
+      this.clear();
+      return;
+    }
+    this.activeId = overlayId;
+    S.activeOverlay = overlayId;
+    el.className = "video-overlay-effect overlay-" + overlayId;
+    el.style.display = "block";
+  },
+  clear() {
+    this.activeId = null;
+    S.activeOverlay = null;
+    const el = $("#videoOverlayEffect");
+    if (el) {
+      el.className = "video-overlay-effect";
+      el.style.display = "none";
+    }
+  }
+};
+window.OverlaysEngine = OverlaysEngine;
+
+// ========================================================
+// MÓDULO 2: MOTION GRAPHICS LOTTIE
+// ========================================================
+const LottieEngine = {
+  play(lottieId, durationMs = 2600) {
+    const container = $("#lottieOverlayContainer");
+    if (!container || !window.lottie) return;
+    container.innerHTML = "";
+    try {
+      window.lottie.loadAnimation({
+        container: container,
+        renderer: "svg",
+        loop: false,
+        autoplay: true,
+        path: `/static/assets/lottie/${lottieId}.json`
+      });
+      setTimeout(() => {
+        if (container) container.innerHTML = "";
+      }, durationMs);
+    } catch (e) {
+      console.warn("Lottie load error:", e);
+    }
+  }
+};
+window.LottieEngine = LottieEngine;
+
+// ========================================================
+// MÓDULO 4: COPILOT IA (TEXTO & VOZ COM UNDO STACK)
+// ========================================================
+const undoStack = [];
+
+function saveUndoSnapshot() {
+  undoStack.push({
+    hl: S.hl,
+    cap: S.cap,
+    hlText: ($("#visualHlText") && $("#visualHlText").value) || "",
+    subScale: S.subScale,
+    hlScale: S.hlScale,
+    depthText: S.depthText,
+    cutSilence: S.el.cutSilence,
+    subColor: S.subColor,
+    sfxItems: JSON.parse(JSON.stringify(S.sfxItems || [])),
+    tipo: S.tipo
+  });
+  if (undoStack.length > 20) undoStack.shift();
+}
+
+function restoreUndoSnapshot() {
+  if (undoStack.length === 0) {
+    appendCopilotMsg("bot", "Nenhuma alteração anterior encontrada para desfazer.");
+    return;
+  }
+  const snap = undoStack.pop();
+  S.hl = snap.hl;
+  S.cap = snap.cap;
+  if ($("#visualHlText")) $("#visualHlText").value = snap.hlText;
+  if ($("#hlText")) $("#hlText").value = snap.hlText;
+  S.subScale = snap.subScale;
+  S.hlScale = snap.hlScale;
+  S.depthText = snap.depthText;
+  S.el.cutSilence = snap.cutSilence;
+  S.subColor = snap.subColor;
+  S.sfxItems = snap.sfxItems;
+  S.tipo = snap.tipo;
+
+  drawOptions();
+  updateHeadlineOverlay();
+  updateSubtitleOverlayAtTime($("#pv") ? $("#pv").currentTime : 0);
+  DepthTextEngine.toggle(S.depthText);
+  drawTL();
+  appendCopilotMsg("bot", "↩️ Última ação desfeita com sucesso!");
+}
+
+function appendCopilotMsg(sender, text) {
+  const container = $("#copilotMessages");
+  if (!container) return;
+  const msgEl = document.createElement("div");
+  msgEl.className = `copilot-msg copilot-${sender}`;
+  const bubble = document.createElement("div");
+  bubble.className = "copilot-bubble";
+  bubble.innerHTML = text;
+  msgEl.appendChild(bubble);
+  container.appendChild(msgEl);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function handleCopilotCommand(text) {
+  if (!text || !text.trim()) return;
+  appendCopilotMsg("user", text.trim());
+  
+  saveUndoSnapshot();
+
+  const pvVideo = $("#pv") || $("#previewPlayer");
+  const curTime = pvVideo ? pvVideo.currentTime : 0;
+
+  try {
+    const res = await post("/api/ai/copilot", {
+      message: text.trim(),
+      current_state: {
+        time: curTime,
+        hl: S.hl,
+        cap: S.cap,
+        depthText: S.depthText
+      }
+    });
+
+    if (res && res.actions) {
+      for (const act of res.actions) {
+        executeCopilotAction(act, curTime);
+      }
+      appendCopilotMsg("bot", res.reply || "Ação executada com sucesso!");
+    } else {
+      appendCopilotMsg("bot", "Comando recebido e aplicado.");
+    }
+  } catch (err) {
+    appendCopilotMsg("bot", "Desculpe, erro ao processar o comando: " + err.message);
+  }
+}
+
+function executeCopilotAction(act, curTime) {
+  if (!act || !act.type) return;
+
+  switch (act.type) {
+    case "cut_silence":
+      S.el.cutSilence = act.enabled ? 1 : 0;
+      if (act.enabled && S.vid) {
+        post("/api/detect_silences", { video_id: S.vid }).then(data => {
+          if (data && data.effective_silences) {
+            S.silenceIntervals = data.effective_silences;
+            drawTL();
+          }
+        }).catch(() => {});
+      }
+      drawOptions();
+      break;
+
+    case "depth_text":
+      DepthTextEngine.toggle(act.enabled);
+      break;
+
+    case "subtitle_style":
+      S.cap = act.style;
+      if (act.disabled) S.captionDisabled = true;
+      else S.captionDisabled = false;
+      const capSel = $("#visualCapStyleSelect");
+      if (capSel) capSel.value = act.style;
+      drawOptions();
+      updateSubtitleOverlayAtTime(curTime);
+      break;
+
+    case "subtitle_color":
+      S.subColor = act.color;
+      updateSubtitleOverlayAtTime(curTime);
+      break;
+
+    case "subtitle_scale_step":
+      S.subScale = Math.max(0.5, Math.min(2.5, (S.subScale || 1.0) + (act.delta / 100.0)));
+      updateSubtitleOverlayAtTime(curTime);
+      break;
+
+    case "add_sfx":
+      SFXEngine.addTimelineItem(act.sfx_id, curTime, 0.8);
+      break;
+
+    case "add_lottie":
+      LottieEngine.play(act.lottie_id);
+      break;
+
+    case "generate_headlines":
+      if (S.vid && S.segs && S.segs.length) {
+        post("/api/ai/edit_brain", { video_id: S.vid, segments: S.segs }).then(data => {
+          if (data && data.headlines && data.headlines.length) {
+            const topHl = data.headlines[0];
+            if ($("#visualHlText")) $("#visualHlText").value = topHl;
+            if ($("#hlText")) $("#hlText").value = topHl;
+            updateHeadlineOverlay();
+            let hlListHtml = data.headlines.map(h => `<li><b>${h}</b></li>`).join("");
+            appendCopilotMsg("bot", `💡 <b>Headlines Sugeridas:</b><ul>${hlListHtml}</ul>A primeira opção foi aplicada!`);
+          }
+        }).catch(() => {});
+      }
+      break;
+
+    case "music_volume":
+      S.musicVol = act.volume;
+      const mVol = $("#musicVol");
+      if (mVol) mVol.value = act.volume;
+      break;
+
+    case "set_tipo":
+      S.tipo = act.tipo;
+      drawOptions();
+      break;
+
+    case "undo":
+      restoreUndoSnapshot();
+      break;
+  }
+}
+
+// Reconhecimento de Voz Local (Web Speech API com fallback Faster-Whisper)
+let speechRec = null;
+let mediaRecorder = null;
+let audioChunks = [];
+
+function initVoiceRecognition() {
+  const micBtn = $("#btnCopilotMic");
+  const waveform = $("#voiceWaveform");
+  if (!micBtn) return;
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (SpeechRecognition) {
+    speechRec = new SpeechRecognition();
+    speechRec.lang = "pt-BR";
+    speechRec.continuous = false;
+    speechRec.interimResults = false;
+
+    speechRec.onstart = () => {
+      micBtn.classList.add("is-recording");
+      if (waveform) waveform.style.display = "flex";
+    };
+
+    speechRec.onresult = e => {
+      const transcript = e.results[0][0].transcript;
+      handleCopilotCommand(transcript);
+    };
+
+    speechRec.onerror = err => {
+      console.warn("Speech recognition error:", err);
+      micBtn.classList.remove("is-recording");
+      if (waveform) waveform.style.display = "none";
+    };
+
+    speechRec.onend = () => {
+      micBtn.classList.remove("is-recording");
+      if (waveform) waveform.style.display = "none";
+    };
+
+    micBtn.onclick = () => {
+      if (micBtn.classList.contains("is-recording")) {
+        speechRec.stop();
+      } else {
+        speechRec.start();
+      }
+    };
+  } else {
+    micBtn.onclick = async () => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        micBtn.classList.remove("is-recording");
+        if (waveform) waveform.style.display = "none";
+      } else {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+
+          mediaRecorder.ondataavailable = ev => {
+            if (ev.data.size > 0) audioChunks.push(ev.data);
+          };
+
+          mediaRecorder.onstop = async () => {
+            const blob = new Blob(audioChunks, { type: "audio/webm" });
+            const formData = new FormData();
+            formData.append("audio", blob, "voice.webm");
+            appendCopilotMsg("user", "🎤 <i>Processando áudio local...</i>");
+
+            try {
+              const res = await fetch("/api/voice_command", { method: "POST", body: formData }).then(r => r.json());
+              if (res && res.transcript) {
+                appendCopilotMsg("user", `"${res.transcript}"`);
+                if (res.actions) {
+                  const pvVideo = $("#pv") || $("#previewPlayer");
+                  const curTime = pvVideo ? pvVideo.currentTime : 0;
+                  for (const act of res.actions) {
+                    executeCopilotAction(act, curTime);
+                  }
+                  appendCopilotMsg("bot", res.reply || "Comando executado!");
+                }
+              }
+            } catch (err) {
+              appendCopilotMsg("bot", "Erro ao processar comando de voz: " + err.message);
+            }
+          };
+
+          mediaRecorder.start();
+          micBtn.classList.add("is-recording");
+          if (waveform) waveform.style.display = "flex";
+        } catch (ex) {
+          alert("Não foi possível acessar o microfone.");
+        }
+      }
+    };
+  }
+}
+
+async function loadAssetsLibrary() {
+  try {
+    const res = await fetch("/api/assets").then(r => r.json());
+    if (!res) return;
+
+    // Grid de SFX
+    const sfxGrid = $("#assetsSfxGrid");
+    if (sfxGrid && res.sfx) {
+      sfxGrid.innerHTML = res.sfx.map(item => `
+        <div class="asset-card">
+          <div>
+            <div class="asset-card-title">${item.name}</div>
+            <span class="asset-card-badge">${item.category}</span>
+          </div>
+          <div class="asset-card-actions">
+            <button type="button" class="btn btn-secondary" onclick="SFXEngine.play('${item.id}', 0.8)">▶ Ouvir</button>
+            <button type="button" class="btn btn-primary" onclick="SFXEngine.addTimelineItem('${item.id}', ($('#pv')||$('#previewPlayer')||{}).currentTime||0, 0.8)">+ Timeline</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    // Grid de Lottie
+    const lottieGrid = $("#assetsLottieGrid");
+    if (lottieGrid && res.lottie) {
+      lottieGrid.innerHTML = res.lottie.map(item => `
+        <div class="asset-card">
+          <div>
+            <div class="asset-card-title">${item.name}</div>
+            <span class="asset-card-badge">${item.category}</span>
+          </div>
+          <div class="asset-card-actions">
+            <button type="button" class="btn btn-primary" onclick="LottieEngine.play('${item.id}')">✨ Inserir na Tela</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    // Grid de Overlays
+    const overlaysGrid = $("#assetsOverlaysGrid");
+    if (overlaysGrid && res.overlays) {
+      overlaysGrid.innerHTML = res.overlays.map(item => `
+        <div class="asset-card">
+          <div>
+            <div class="asset-card-title">${item.name}</div>
+            <span class="asset-card-badge">Modo: ${item.blend_mode}</span>
+          </div>
+          <div class="asset-card-actions">
+            <button type="button" class="btn ${S.activeOverlay === item.id ? 'btn-primary' : 'btn-secondary'}" onclick="OverlaysEngine.apply('${item.id}')">
+              ${S.activeOverlay === item.id ? '✓ Ativo' : 'Aplicar'}
+            </button>
+          </div>
+        </div>
+      `).join("");
+    }
+  } catch (e) {
+    console.warn("Error loading assets:", e);
+  }
+}
+
+function initRetentionFeatures() {
+  const btnToggleCopilot = $("#btnToggleCopilot");
+  const btnCloseCopilot = $("#btnCloseCopilot");
+  const copilotSidebar = $("#copilotSidebar");
+
+  if (btnToggleCopilot && copilotSidebar) {
+    btnToggleCopilot.onclick = () => {
+      const isVisible = copilotSidebar.style.display === "flex";
+      copilotSidebar.style.display = isVisible ? "none" : "flex";
+    };
+  }
+  if (btnCloseCopilot && copilotSidebar) {
+    btnCloseCopilot.onclick = () => {
+      copilotSidebar.style.display = "none";
+    };
+  }
+
+  document.querySelectorAll(".copilot-chip").forEach(chip => {
+    chip.onclick = () => {
+      const cmd = chip.dataset.cmd;
+      if (cmd) handleCopilotCommand(cmd);
+    };
+  });
+
+  const copilotInp = $("#copilotInput");
+  const copilotSend = $("#btnCopilotSend");
+  if (copilotInp && copilotSend) {
+    const doSend = () => {
+      const v = copilotInp.value.trim();
+      if (v) {
+        handleCopilotCommand(v);
+        copilotInp.value = "";
+      }
+    };
+    copilotSend.onclick = doSend;
+    copilotInp.onkeydown = e => { if (e.key === "Enter") doSend(); };
+  }
+
+  initVoiceRecognition();
+
+  const depthToggle = $("#depthTextToggle");
+  if (depthToggle) {
+    depthToggle.onchange = e => {
+      DepthTextEngine.toggle(e.target.checked);
+    };
+  }
+
+  const btnAutoSilence = $("#btnAutoSilenceCut");
+  if (btnAutoSilence) {
+    btnAutoSilence.onclick = async () => {
+      if (!S.vid) {
+        alert("Envie um vídeo primeiro na aba Corte.");
+        return;
+      }
+      btnAutoSilence.textContent = "⏳ Analisando...";
+      try {
+        const data = await post("/api/detect_silences", { video_id: S.vid });
+        if (data && data.effective_silences) {
+          S.silenceIntervals = data.effective_silences;
+          S.el.cutSilence = 1;
+          drawTL();
+          alert(`✂️ Detecção concluída!\n${data.silence_cut_count} respiros/silêncios encontrados (${data.total_silence_duration}s recortados).\nOs vazios serão ignorados automaticamente no preview e na renderização.`);
+        }
+      } catch (err) {
+        alert("Erro ao detectar silêncios: " + err.message);
+      } finally {
+        btnAutoSilence.textContent = "✂️ Auto-Corte Respiros";
+      }
+    };
+  }
+
+  const btnBrain = $("#btnBrainAI");
+  if (btnBrain) {
+    btnBrain.onclick = async () => {
+      if (!S.vid || !S.segs || !S.segs.length) {
+        alert("Envie e transcreva o vídeo primeiro na aba Corte.");
+        return;
+      }
+      btnBrain.textContent = "🧠 Pensando...";
+      try {
+        const data = await post("/api/ai/edit_brain", { video_id: S.vid, segments: S.segs });
+        if (data) {
+          if (data.headlines && data.headlines.length) {
+            const h = data.headlines[0];
+            if ($("#visualHlText")) $("#visualHlText").value = h;
+            if ($("#hlText")) $("#hlText").value = h;
+            updateHeadlineOverlay();
+          }
+          if (data.sfx && data.sfx.length) {
+            for (const s of data.sfx) {
+              SFXEngine.addTimelineItem(s.sfx_id, s.time, s.volume || 0.8);
+            }
+          }
+          alert(`🧠 Brain IA aplicou:\n- Headline viral: "${data.headlines[0]}"\n- ${data.sfx ? data.sfx.length : 0} marcadores SFX distribuídos na timeline\n- Ênfases nos momentos de alta retenção.`);
+        }
+      } catch (err) {
+        alert("Erro no Brain IA: " + err.message);
+      } finally {
+        btnBrain.textContent = "🧠 Brain IA";
+      }
+    };
+  }
+
+  const btnOpenAssets = $("#btnOpenAssetsModal");
+  const btnCloseAssets = $("#btnCloseAssetsModal");
+  const modalAssets = $("#modalAssetsLibrary");
+
+  if (btnOpenAssets && modalAssets) {
+    btnOpenAssets.onclick = () => {
+      modalAssets.style.display = "flex";
+      loadAssetsLibrary();
+    };
+  }
+  if (btnCloseAssets && modalAssets) {
+    btnCloseAssets.onclick = () => {
+      modalAssets.style.display = "none";
+    };
+  }
+
+  document.querySelectorAll(".assets-tab-btn").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".assets-tab-btn").forEach(b => b.classList.remove("on"));
+      document.querySelectorAll(".assets-tab-pane").forEach(p => p.style.display = "none");
+      btn.classList.add("on");
+      const targetPane = $("#" + btn.dataset.target);
+      if (targetPane) targetPane.style.display = "block";
+    };
+  });
+}
+
+// LOOP DE ANIMAÇÃO DO PLAYHEAD, CLOCK, E DISPAROS EM TEMPO REAL
 (function loop() {
   const isRenderedView = (S.viewMode === "rendered" && S.renderedUrl);
   const pvFull = $("#pvRenderedFull");
@@ -3299,6 +4014,29 @@ if (fitBtn) {
       updateMediaPreviewAtTime(v.currentTime);
       updateSubtitleOverlayAtTime(v.currentTime);
       updateHeadlineOverlay(v.currentTime);
+
+      // LIVE AUTO-SKIP DE RESPIROS E SILÊNCIOS NA TIMELINE
+      if (S.el.cutSilence && S.silenceIntervals && S.silenceIntervals.length && !v.paused) {
+        const ct = v.currentTime;
+        for (const sil of S.silenceIntervals) {
+          if (ct >= sil.start && ct < sil.end) {
+            v.currentTime = sil.end + 0.02;
+            break;
+          }
+        }
+      }
+
+      // DISPARO DINÂMICO DE SFX NA TIMELINE
+      if (S.sfxItems && S.sfxItems.length && !v.paused) {
+        const ct = v.currentTime;
+        for (const item of S.sfxItems) {
+          if (Math.abs(ct - item.time) < 0.08 && !item._triggered) {
+            SFXEngine.play(item.sfx_id, item.volume || 0.8);
+            item._triggered = true;
+            setTimeout(() => { item._triggered = false; }, 800);
+          }
+        }
+      }
     }
   }
   requestAnimationFrame(loop);
@@ -3327,4 +4065,5 @@ drawOptions();
 renderMediaLists();
 loadCustomFonts();
 resetSubtitleColors();
+initRetentionFeatures();
 tab("corte");

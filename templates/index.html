@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Edvid — Preview</title>
 <link rel="stylesheet" href="/static/style.css">
+<!-- Bibliotecas Locais / CDN para IA Visual (MediaPipe Selfie Segmentation e Lottie Web) -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
 </head>
 <body>
 <header>
@@ -14,6 +18,12 @@
   <div class="proj-meta">
     <b id="projTitle">Novo projeto</b>
     <small id="projSub">Envie um vídeo na aba Corte para começar</small>
+  </div>
+  <div class="header-actions">
+    <button type="button" class="btn btn-copilot" id="btnToggleCopilot" title="Abrir Assistente Copilot (Texto e Voz)">⚡ Copilot IA</button>
+    <button type="button" class="btn btn-secondary btn-header-tool" id="btnOpenAssetsModal" title="Biblioteca de SFX, Overlays e Motion Graphics">🎨 Efeitos & SFX</button>
+    <button type="button" class="btn btn-secondary btn-header-tool" id="btnAutoSilenceCut" title="Detecção e Recorte Automático de Silêncios">✂️ Auto-Corte Respiros</button>
+    <button type="button" class="btn btn-secondary btn-header-tool" id="btnBrainAI" title="IA Local: Sugerir Headlines, B-Roll e Ênfases">🧠 Brain IA</button>
   </div>
 </header>
 
@@ -437,6 +447,16 @@
                     <input type="color" id="visualHlOutlineColor" value="#000000" style="width:16px;height:16px;border:none;border-radius:3px;cursor:pointer;background:transparent;padding:0;" title="Cor do Contorno">
                   </div>
                 </div>
+                <!-- Efeito 3D Depth: Texto Atrás de Mim -->
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px;padding:2px 6px;background:#0d1016;border:1px solid #1f2533;border-radius:4px;">
+                  <span style="font-size:9.5px;color:#60a5fa;font-weight:700;display:flex;align-items:center;gap:4px;">
+                    <span>👤</span> Texto Atrás de Mim (3D Depth)
+                  </span>
+                  <label class="toggle-switch-sm" style="transform:scale(0.8);margin:0;">
+                    <input type="checkbox" id="depthTextToggle">
+                    <span class="toggle-slider-sm"></span>
+                  </label>
+                </div>
               </div>
 
               <!-- MODO MODELO NA ABA VISUAL (Linha única compacta) -->
@@ -500,6 +520,10 @@
               <select id="visualCapStyleSelect" class="ib" style="width:100%;font-size:10.5px;padding:2px 6px;margin:1px 0 4px 0;height:22px;">
                 <option value="hormozi">Hormozi Viral</option>
                 <option value="karaoke_ciano">Karaokê Ciano</option>
+                <option value="pop_in">Pop In Elástico (Max 2 Palavras)</option>
+                <option value="karaoke_highlight">Karaokê Destaque Instantâneo</option>
+                <option value="active_box">Active Box (Caixa Dinâmica)</option>
+                <option value="karaoke_neon">Karaokê Neon</option>
                 <option value="karaoke">Karaokê Laranja</option>
                 <option value="verde_limao">Verde Limão</option>
                 <option value="rubi_impacto">Rubi Impacto</option>
@@ -647,6 +671,15 @@
           </div>
         </div>
 
+        <!-- CANVAS DO EFEITO 3D DEPTH (PESSOA SEGMENTADA EM PRIMEIRO PLANO) -->
+        <canvas id="depthCanvas" class="depth-canvas" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:18;"></canvas>
+
+        <!-- CONTAINER DE ANIMAÇÕES MOTION GRAPHICS (LOTTIE) -->
+        <div id="lottieOverlayContainer" class="lottie-overlay-container" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:22;overflow:hidden;"></div>
+
+        <!-- CONTAINER DE OVERLAYS DE VÍDEO (FILM GRAIN, LIGHT LEAKS, ETC) -->
+        <div id="videoOverlayEffect" class="video-overlay-effect" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:24;"></div>
+
         <!-- OVERLAY DE LEGENDA (EXCLUSIVAMENTE PARA REPOSICIONAMENTO ESPACIAL X E Y) -->
         <div id="subPreviewOverlay" class="canvas-item-overlay sub-preview-overlay" style="display:none;" tabindex="0">
           <div class="canvas-item-box" id="subBox">
@@ -691,6 +724,102 @@
       <button class="btn btn-primary" id="modalViewBtn">▶ Assistir Preview</button>
       <a class="btn btn-success" id="modalDownloadBtn" download="video_editado.mp4" href="#">⬇️ Baixar Vídeo (.mp4)</a>
       <button class="btn btn-secondary" id="modalCloseBtn">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SIDEBAR DO COPILOT IA (TEXTO & VOZ) -->
+<aside id="copilotSidebar" class="copilot-sidebar" style="display:none;">
+  <div class="copilot-header">
+    <div class="copilot-title-group">
+      <span class="copilot-icon">⚡</span>
+      <div>
+        <h4 class="copilot-title">Copilot IA Local</h4>
+        <small class="copilot-sub">Zero Tokens · Offline · Comandos Diretos</small>
+      </div>
+    </div>
+    <button type="button" class="copilot-close-btn" id="btnCloseCopilot" title="Fechar Copilot">✕</button>
+  </div>
+
+  <!-- Sugestões Rápidas (Chips) -->
+  <div class="copilot-chips-bar">
+    <button type="button" class="copilot-chip" data-cmd="corte os silêncios e respiros">✂️ Cortar Silêncios</button>
+    <button type="button" class="copilot-chip" data-cmd="ative texto atrás de mim">👤 Texto Atrás (3D)</button>
+    <button type="button" class="copilot-chip" data-cmd="mude a legenda para hormozi">🔥 Legenda Hormozi</button>
+    <button type="button" class="copilot-chip" data-cmd="coloque legenda estilo pop in">⚡ Legenda Pop In</button>
+    <button type="button" class="copilot-chip" data-cmd="adicione um whoosh curto">🔊 SFX Whoosh</button>
+    <button type="button" class="copilot-chip" data-cmd="adicione uma seta na tela">🎯 Seta Motion</button>
+    <button type="button" class="copilot-chip" data-cmd="gere headlines virais magnéticas">💡 Headlines Virais</button>
+    <button type="button" class="copilot-chip" data-cmd="desfaça isso">↩️ Desfazer Ação</button>
+  </div>
+
+  <!-- Histórico de Conversa -->
+  <div id="copilotMessages" class="copilot-messages">
+    <div class="copilot-msg copilot-bot">
+      <div class="copilot-bubble">
+        👋 Olá! Sou o seu <b>Copilot IA Local</b>. Posso recortar silêncios, colocar a headline atrás de você em 3D, alterar estilos e cores de legenda, inserir efeitos sonoros e stickers animados.
+        <br><br>
+        Fale pelo microfone ou digite o que você precisa!
+      </div>
+    </div>
+  </div>
+
+  <!-- Equalizador Visual de Voz -->
+  <div id="voiceWaveform" class="voice-waveform" style="display:none;">
+    <div class="voice-wave-bar"></div>
+    <div class="voice-wave-bar"></div>
+    <div class="voice-wave-bar"></div>
+    <div class="voice-wave-bar"></div>
+    <div class="voice-wave-bar"></div>
+    <span class="voice-wave-text">Ouvindo sua voz...</span>
+  </div>
+
+  <!-- Barra de Entrada de Comando (Texto + Microfone) -->
+  <div class="copilot-input-area">
+    <button type="button" class="btn-copilot-mic" id="btnCopilotMic" title="Gravar comando por voz">
+      🎤
+    </button>
+    <input type="text" id="copilotInput" class="copilot-input-field" placeholder="Ex: 'corte os silêncios' ou 'texto atrás'...">
+    <button type="button" class="btn-copilot-send" id="btnCopilotSend" title="Enviar comando">
+      ➤
+    </button>
+  </div>
+</aside>
+
+<!-- MODAL BIBLIOTECA DE SFX, OVERLAYS E MOTION GRAPHICS -->
+<div id="modalAssetsLibrary" class="modal-backdrop" style="display:none;">
+  <div class="modal-card modal-assets-card">
+    <div class="modal-assets-header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:20px;">🎨</span>
+        <div>
+          <h3 style="margin:0;font-size:16px;color:#fff;">Starter Pack de Alta Retenção</h3>
+          <small style="color:#94a3b8;font-size:11px;">13 SFX físicos locais, Overlays cinematográficos e Motion Graphics Lottie</small>
+        </div>
+      </div>
+      <button type="button" class="modal-close-icon" id="btnCloseAssetsModal">✕</button>
+    </div>
+
+    <!-- Abas Internas -->
+    <div class="assets-tabs-nav">
+      <button type="button" class="assets-tab-btn on" data-target="assetsTabSfx">🔊 Efeitos Sonoros (13 SFX)</button>
+      <button type="button" class="assets-tab-btn" data-target="assetsTabLottie">✨ Motion Graphics (Lottie)</button>
+      <button type="button" class="assets-tab-btn" data-target="assetsTabOverlays">🎞️ Overlays de Vídeo</button>
+    </div>
+
+    <!-- Painel 1: SFX -->
+    <div id="assetsTabSfx" class="assets-tab-pane on">
+      <div id="assetsSfxGrid" class="assets-grid sfx-grid"></div>
+    </div>
+
+    <!-- Painel 2: Lottie -->
+    <div id="assetsTabLottie" class="assets-tab-pane" style="display:none;">
+      <div id="assetsLottieGrid" class="assets-grid lottie-grid"></div>
+    </div>
+
+    <!-- Painel 3: Overlays -->
+    <div id="assetsTabOverlays" class="assets-tab-pane" style="display:none;">
+      <div id="assetsOverlaysGrid" class="assets-grid overlays-grid"></div>
     </div>
   </div>
 </div>

@@ -1,0 +1,27 @@
+{
+  "film_grain": {
+    "name": "Film Grain (Granulado)",
+    "blend": "overlay",
+    "opacity": 0.45
+  },
+  "light_leaks": {
+    "name": "Light Leaks (Vazamento de Luz)",
+    "blend": "screen",
+    "opacity": 0.55
+  },
+  "flash_transition": {
+    "name": "Flash Transition (Clar\u00e3o)",
+    "blend": "screen",
+    "opacity": 0.9
+  },
+  "glitch": {
+    "name": "Glitch RGB Split",
+    "blend": "screen",
+    "opacity": 0.7
+  },
+  "paper_tear": {
+    "name": "Paper Tear (Rasgo de Papel)",
+    "blend": "multiply",
+    "opacity": 0.85
+  }
+}
