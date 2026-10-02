@@ -449,6 +449,35 @@ if (prevPlayer) {
   prevPlayer.addEventListener("loadedmetadata", updatePlayerTimeDisplay);
 }
 
+if (pv) {
+  pv.addEventListener("timeupdate", () => {
+    const cur = pv.currentTime || 0;
+    updateSubtitleOverlayAtTime(cur);
+    updateHeadlineOverlay(cur);
+    if (window.DepthTextEngine && window.DepthTextEngine.active) {
+      window.DepthTextEngine.processFrame();
+    }
+  });
+  pv.addEventListener("seeked", () => {
+    const cur = pv.currentTime || 0;
+    updateSubtitleOverlayAtTime(cur);
+    updateHeadlineOverlay(cur);
+    if (window.DepthTextEngine && window.DepthTextEngine.active) {
+      window.DepthTextEngine.processFrame();
+    }
+  });
+}
+
+const pvRenderedFullEl = $("#pvRenderedFull");
+if (pvRenderedFullEl) {
+  pvRenderedFullEl.addEventListener("timeupdate", () => {
+    const cur = pvRenderedFullEl.currentTime || 0;
+    updateSubtitleOverlayAtTime(cur);
+    updateHeadlineOverlay(cur);
+  });
+}
+
+
 const btnRewind = $("#btnRewind");
 if (btnRewind) {
   btnRewind.onclick = () => {
@@ -1993,12 +2022,45 @@ function updateHeadlineOverlay(curTime) {
 }
 
 // ========================================================
-// SISTEMA DE CHUNKING DE PALAVRAS VIRAL (1 A 3 PALAVRAS POR TELA)
+// SISTEMA DE CHUNKING DE PALAVRAS VIRAL (MÁXIMO 2 PALAVRAS POR TELA)
 // Réplica idêntica de chunk_words() e build_ass_subtitles() do backend
 // Garante fidelidade visual 1:1 rigorosa entre modo Edição e Renderização
 // ========================================================
+function generateDemoSubtitleSegments(duration = 10) {
+  const d = Math.max(5, duration || 10);
+  const sampleWords = [
+    "DOMINE", "O VÍDEO",
+    "EDIÇÃO", "VIRAL",
+    "ALTA", "RETENÇÃO",
+    "TEXTO", "3D",
+    "RESULTADO", "PROFISSIONAL"
+  ];
+  const step = 0.9;
+  const words = [];
+  let curT = 0.0;
+  let wordIdx = 0;
+  while (curT + step <= d && wordIdx < sampleWords.length) {
+    const w = sampleWords[wordIdx];
+    const s = Math.round(curT * 100) / 100;
+    const e = Math.round((curT + step * 0.9) * 100) / 100;
+    words.push({ word: w, start: s, end: e });
+    curT += step;
+    wordIdx++;
+  }
+  return [{
+    start: 0,
+    end: d,
+    text: words.map(w => w.word).join(" "),
+    words: words,
+    isDemo: true
+  }];
+}
+
 function getSubtitleChunks() {
-  if (!S.segs || !S.segs.length) return [];
+  if (!S.segs || !S.segs.length) {
+    S.segs = generateDemoSubtitleSegments(S.dur || 10);
+    S._subChunksValid = false;
+  }
   if (S._subChunks && S._subChunksValid) {
     return S._subChunks;
   }
@@ -2033,13 +2095,13 @@ function getSubtitleChunks() {
     }
   }
 
-  // Chunker de alta retenção vertical (MÁXIMO 2 palavras por bloco na tela)
+  // Chunker de alta retenção vertical (MÁXIMO ESTRITO DE 2 PALAVRAS POR BLOCO NA TELA)
   const chunks = [];
   let cur = [];
   for (const w of allWords) {
     cur.push(w);
     const dur = cur[cur.length - 1].end - cur[0].start;
-    if (cur.length >= 2 || dur >= 1.0) {
+    if (cur.length >= 2 || dur >= 0.8) {
       chunks.push({
         words: cur,
         start: cur[0].start,
@@ -2076,6 +2138,7 @@ function updateSubtitleOverlayAtTime(curTime) {
   }
 
   overlay.style.display = "flex";
+  overlay.style.zIndex = "26"; // Camada 4: Topo absoluto acima de Depth Text (18) e Headline (10)
   if (!overlay.classList.contains("is-dragging")) {
     overlay.style.left = (S.subPosX !== undefined ? S.subPosX : 50) + "%";
     overlay.style.top = (S.subPosY !== undefined ? S.subPosY : 77.0) + "%";
@@ -2111,16 +2174,13 @@ function updateSubtitleOverlayAtTime(curTime) {
   }
 
   const chunks = getSubtitleChunks();
-  const isKaraokeStyle = ["hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub", "ouro_premium", "azul_royal", "roxo_cyber", "caixa_vermelha"].includes(capStyle);
-  const isUpper = ["hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "destaque", "pop_destaque", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub", "ouro_premium", "azul_royal", "roxo_cyber", "caixa_vermelha"].includes(capStyle);
+  const isPopStyle = ["pop_in", "pop_destaque"].includes(capStyle);
+  const isHighlightStyle = ["karaoke_highlight", "hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub", "ouro_premium", "azul_royal", "roxo_cyber", "caixa_vermelha", "active_box"].includes(capStyle);
+  const isUpper = ["hormozi", "karaoke", "karaoke_neon", "karaoke_ciano", "destaque", "pop_destaque", "pop_in", "karaoke_highlight", "active_box", "verde_limao", "rubi_impacto", "caixa_preta_sub", "caixa_amarela_sub", "ouro_premium", "azul_royal", "roxo_cyber", "caixa_vermelha"].includes(capStyle);
 
   // Se não há legendas transcritas ainda, exibe placeholder limpo de 2 palavras
   if (!chunks || chunks.length === 0) {
-    if (isKaraokeStyle) {
-      contentEl.innerHTML = `<b>SUA</b> LEGENDA`;
-    } else {
-      contentEl.textContent = isUpper ? "SUA LEGENDA" : "Sua Legenda";
-    }
+    contentEl.textContent = isUpper ? "SUA LEGENDA" : "Sua Legenda";
     return;
   }
 
@@ -2140,27 +2200,41 @@ function updateSubtitleOverlayAtTime(curTime) {
     return;
   }
 
-  // Formatação com base no estilo
-  if (isKaraokeStyle) {
-    let activeIdx = -1;
-    if (isExactTime) {
-      activeIdx = activeChunk.words.findIndex(w => curTime >= w.start && curTime <= w.end);
-    }
-    if (activeIdx === -1) activeIdx = 0;
-
-    const htmlWords = activeChunk.words.map((w, idx) => {
-      const raw = isUpper ? w.word.toUpperCase() : w.word;
-      if (idx === activeIdx) {
-        return `<b>${raw}</b>`;
-      }
-      return raw;
-    });
-
-    contentEl.innerHTML = htmlWords.join(" ");
-  } else {
-    const text = activeChunk.words.map(w => isUpper ? w.word.toUpperCase() : w.word).join(" ");
-    contentEl.textContent = text;
+  // Palavra ativa no milissegundo exato
+  let activeWordIdx = -1;
+  if (isExactTime) {
+    activeWordIdx = activeChunk.words.findIndex(w => curTime >= w.start && curTime <= w.end);
   }
+  if (activeWordIdx === -1) activeWordIdx = 0;
+
+  const htmlWords = activeChunk.words.map((w, idx) => {
+    const isWordActive = (idx === activeWordIdx);
+    const raw = isUpper ? w.word.toUpperCase() : w.word;
+    const classes = ["sub-word"];
+    const styles = [];
+
+    if (isWordActive) {
+      classes.push("active-word");
+      if (isPopStyle) {
+        styles.push("transform: scale(1.15)");
+        styles.push("display: inline-block");
+      }
+      if (isHighlightStyle) {
+        const highColor = S.subHighlightColor || S.subColor || "#ffe600";
+        styles.push(`color: ${highColor}`);
+        styles.push("text-shadow: none !important");
+      }
+    } else {
+      if (isHighlightStyle && S.subTextColor) {
+        styles.push(`color: ${S.subTextColor}`);
+      }
+    }
+
+    const st = styles.length ? ` style="${styles.join('; ')}"` : "";
+    return `<span class="${classes.join(' ')}"${st}>${raw}</span>`;
+  });
+
+  contentEl.innerHTML = htmlWords.join(" ");
 }
 
 // ========================================================
@@ -3379,7 +3453,7 @@ window.SFXEngine = SFXEngine;
 
 // ========================================================
 // MÓDULO 3: 3D DEPTH TEXT ("TEXTO ATRÁS DE MIM")
-// Camadas: Vídeo Base -> Headline (Z=10) -> Apresentador Mascarado (Z=18) -> Legenda (Z=26)
+// Camadas: Vídeo Base (Z=5) -> Headline (Z=10) -> Apresentador Mascarado (Z=18) -> Legenda (Z=26)
 // ========================================================
 const DepthTextEngine = {
   segmenter: null,
@@ -3388,44 +3462,126 @@ const DepthTextEngine = {
   animFrame: null,
   active: false,
   initialized: false,
+  processing: false,
+  lastTime: -1,
+
   init() {
-    if (this.initialized) return;
     this.canvas = $("#depthCanvas");
     if (!this.canvas) return;
     this.ctx = this.canvas.getContext("2d", { willReadFrequently: true });
-    if (window.SelfieSegmentation) {
+
+    if (window.SelfieSegmentation && !this.segmenter) {
       try {
         this.segmenter = new window.SelfieSegmentation({
           locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
         });
-        this.segmenter.setOptions({ modelSelection: 1 });
+        this.segmenter.setOptions({
+          modelSelection: 1, // 1 = rápida / mobile
+          selfieMode: false
+        });
         this.segmenter.onResults(results => this.onResults(results));
+        this.initialized = true;
       } catch (err) {
         console.warn("MediaPipe selfie segmentation init error:", err);
       }
+    } else if (!window.SelfieSegmentation && !this.initialized) {
+      let retries = 0;
+      const poll = setInterval(() => {
+        retries++;
+        if (window.SelfieSegmentation) {
+          clearInterval(poll);
+          this.init();
+          if (this.active) this.start();
+        } else if (retries > 20) {
+          clearInterval(poll);
+        }
+      }, 250);
     }
-    this.initialized = true;
   },
+
+  syncPosition() {
+    if (!this.canvas) return;
+    const slotCam = $("#previewSlotCam");
+    const phone = $("#phoneFrame");
+    const video = $("#pv");
+    if (!slotCam || !phone) return;
+
+    const phoneRect = phone.getBoundingClientRect();
+    const camRect = slotCam.getBoundingClientRect();
+    if (phoneRect.height > 0) {
+      const topPct = ((camRect.top - phoneRect.top) / phoneRect.height) * 100;
+      const heightPct = (camRect.height / phoneRect.height) * 100;
+      this.canvas.style.top = `${topPct}%`;
+      this.canvas.style.left = "0%";
+      this.canvas.style.width = "100%";
+      this.canvas.style.height = `${heightPct}%`;
+    }
+    if (video && video.style.objectPosition) {
+      this.canvas.style.objectPosition = video.style.objectPosition;
+    }
+  },
+
   onResults(results) {
     if (!this.active || !this.ctx || !this.canvas) return;
     const w = this.canvas.width;
     const h = this.canvas.height;
     if (w === 0 || h === 0) return;
+
     this.ctx.save();
     this.ctx.clearRect(0, 0, w, h);
+    // 1. Desenha a máscara de segmentação da pessoa
     this.ctx.drawImage(results.segmentationMask, 0, 0, w, h);
+    // 2. Composição source-in: mantém estritamente a pessoa e descarta o fundo
     this.ctx.globalCompositeOperation = "source-in";
     this.ctx.drawImage(results.image, 0, 0, w, h);
     this.ctx.restore();
   },
+
+  async processFrame() {
+    if (!this.active || !this.canvas) return;
+    if (!this.segmenter) {
+      this.init();
+      if (!this.segmenter) return;
+    }
+    const video = $("#pv");
+    if (!video || video.readyState < 2 || this.processing) return;
+
+    if (this.canvas.width !== video.videoWidth && video.videoWidth > 0) {
+      this.canvas.width = video.videoWidth;
+      this.canvas.height = video.videoHeight;
+    }
+
+    if (this.canvas.width > 0) {
+      this.processing = true;
+      try {
+        await this.segmenter.send({ image: video });
+      } catch (e) {
+        // Ignora erros transitórios de frame
+      }
+      this.processing = false;
+    }
+  },
+
   toggle(enable) {
     S.depthText = !!enable;
     const toggleInput = $("#depthTextToggle");
     if (toggleInput) toggleInput.checked = S.depthText;
 
+    const phoneFrame = $("#phoneFrame");
+    if (phoneFrame) {
+      phoneFrame.classList.toggle("has-depth-text", S.depthText);
+    }
+
     const hlOverlay = $("#hlPreviewOverlay");
     if (hlOverlay) {
+      // Camada 2: Headline fica em Z=10 quando 3D Depth está ativo (atrás do canvas da pessoa Z=18)
       hlOverlay.style.zIndex = S.depthText ? "10" : "20";
+    }
+
+    const subOverlay = $("#subPreviewOverlay");
+    if (subOverlay) {
+      // Camada 4: Legendas ficam no topo absoluto (Z=26)
+      subOverlay.style.zIndex = "26";
     }
 
     if (S.depthText) {
@@ -3435,34 +3591,38 @@ const DepthTextEngine = {
       this.stop();
     }
   },
+
   start() {
     this.active = true;
-    if (this.canvas) this.canvas.style.display = "block";
+    if (this.canvas) {
+      this.canvas.style.display = "block";
+      this.canvas.style.zIndex = "18";
+    }
+    this.syncPosition();
+    this.processFrame();
+
     const video = $("#pv");
     if (!video) return;
 
-    let processing = false;
+    if (this.animFrame) cancelAnimationFrame(this.animFrame);
+
     const loop = async () => {
       if (!this.active) return;
-      if (!video.paused && !video.ended && video.readyState >= 2 && !processing) {
-        if (this.canvas.width !== video.videoWidth && video.videoWidth > 0) {
-          this.canvas.width = video.videoWidth;
-          this.canvas.height = video.videoHeight;
-        }
-        if (this.segmenter && this.canvas.width > 0) {
-          processing = true;
-          try {
-            await this.segmenter.send({ image: video });
-          } catch (e) {}
-          processing = false;
-        } else {
-          this.fallbackRender(video);
+      this.syncPosition();
+
+      if (video.readyState >= 2 && !this.processing) {
+        const isPlaying = !video.paused && !video.ended;
+        const isNewTime = Math.abs(video.currentTime - this.lastTime) > 0.03;
+        if (isPlaying || isNewTime) {
+          this.lastTime = video.currentTime;
+          await this.processFrame();
         }
       }
       this.animFrame = requestAnimationFrame(loop);
     };
     loop();
   },
+
   stop() {
     this.active = false;
     if (this.animFrame) cancelAnimationFrame(this.animFrame);
@@ -3472,13 +3632,10 @@ const DepthTextEngine = {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       }
     }
-  },
-  fallbackRender(video) {
-    if (!this.ctx || !this.canvas || this.canvas.width === 0) return;
-    this.ctx.save();
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.drawImage(video, 0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.restore();
+    const hlOverlay = $("#hlPreviewOverlay");
+    if (hlOverlay) {
+      hlOverlay.style.zIndex = "20";
+    }
   }
 };
 window.DepthTextEngine = DepthTextEngine;
@@ -3539,7 +3696,7 @@ const LottieEngine = {
 window.LottieEngine = LottieEngine;
 
 // ========================================================
-// MÓDULO 4: COPILOT IA (TEXTO & VOZ COM UNDO STACK)
+// MÓDULO 4: COPILOT IA (PARSER CLIENT-SIDE 100% LOCAL & VOZ REAL)
 // ========================================================
 const undoStack = [];
 
@@ -3553,6 +3710,12 @@ function saveUndoSnapshot() {
     depthText: S.depthText,
     cutSilence: S.el.cutSilence,
     subColor: S.subColor,
+    subTextColor: S.subTextColor,
+    subHighlightColor: S.subHighlightColor,
+    subOutlineColor: S.subOutlineColor,
+    hlTextColor: S.hlTextColor,
+    hlOutlineColor: S.hlOutlineColor,
+    musicVol: S.musicVol,
     sfxItems: JSON.parse(JSON.stringify(S.sfxItems || [])),
     tipo: S.tipo
   });
@@ -3570,17 +3733,29 @@ function restoreUndoSnapshot() {
   if ($("#visualHlText")) $("#visualHlText").value = snap.hlText;
   if ($("#hlText")) $("#hlText").value = snap.hlText;
   S.subScale = snap.subScale;
+  setSubtitleScale(Math.round((snap.subScale || 1.0) * 100));
   S.hlScale = snap.hlScale;
+  setHeadlineScale(Math.round((snap.hlScale || 1.0) * 100));
   S.depthText = snap.depthText;
+  DepthTextEngine.toggle(snap.depthText);
   S.el.cutSilence = snap.cutSilence;
-  S.subColor = snap.subColor;
+  if (snap.subTextColor || snap.subColor) {
+    syncSubtitleColors(snap.subTextColor || snap.subColor, snap.subHighlightColor, snap.subOutlineColor);
+  }
+  if (snap.hlTextColor) {
+    syncHeadlineColor(snap.hlTextColor, snap.hlOutlineColor);
+  }
+  if (snap.musicVol !== undefined) {
+    S.musicVol = snap.musicVol;
+    const mVol = $("#musicVol");
+    if (mVol) mVol.value = snap.musicVol;
+  }
   S.sfxItems = snap.sfxItems;
   S.tipo = snap.tipo;
 
   drawOptions();
   updateHeadlineOverlay();
   updateSubtitleOverlayAtTime($("#pv") ? $("#pv").currentTime : 0);
-  DepthTextEngine.toggle(S.depthText);
   drawTL();
   appendCopilotMsg("bot", "↩️ Última ação desfeita com sucesso!");
 }
@@ -3598,18 +3773,350 @@ function appendCopilotMsg(sender, text) {
   container.scrollTop = container.scrollHeight;
 }
 
-async function handleCopilotCommand(text) {
-  if (!text || !text.trim()) return;
-  appendCopilotMsg("user", text.trim());
-  
-  saveUndoSnapshot();
+function applyFallbackHeadline() {
+  const fallbacks = [
+    "O SEGREDO QUE NINGUÉM TE CONTA",
+    "PARE DE FAZER ISSO AGORA MESMO",
+    "O MÉTODO DEFINITIVO PARA CRESCER",
+    "3 DICAS INFALÍVEIS QUE VOCÊ PRECISA SABER",
+    "COMO DOMINAR ESSE MERCADO RÁPIDO"
+  ];
+  const chosen = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+  if ($("#visualHlText")) $("#visualHlText").value = chosen;
+  if ($("#hlText")) $("#hlText").value = chosen;
+  updateHeadlineOverlay();
+  let listHtml = fallbacks.map(h => `<li><b>${h}</b></li>`).join("");
+  appendCopilotMsg("bot", `💡 <b>Headlines Sugeridas:</b><ul>${listHtml}</ul>A headline <b>"${chosen}"</b> foi aplicada!`);
+}
+
+// PARSER CLIENT-SIDE DE COMANDOS (Zero Latência / Zero Dependência de Servidor)
+function parseAndExecuteCopilotCommand(rawText) {
+  if (!rawText || !rawText.trim()) return false;
+  const text = rawText.trim();
+  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   const pvVideo = $("#pv") || $("#previewPlayer");
   const curTime = pvVideo ? pvVideo.currentTime : 0;
 
+  // 1. DESFAZER / UNDO
+  if (/(desfazer|desfaca|desfaça|voltar|reverter|undo)/.test(lower)) {
+    restoreUndoSnapshot();
+    return true;
+  }
+
+  // 2. TEXTO ATRÁS DE MIM (3D DEPTH)
+  if (/(desativar|remover|tirar|desligar).*(atras|3d|depth)/.test(lower)) {
+    saveUndoSnapshot();
+    DepthTextEngine.toggle(false);
+    appendCopilotMsg("bot", "👤 Efeito <b>Texto Atrás da Pessoa</b> desativado.");
+    return true;
+  }
+  if (/(atras de mim|atras da pessoa|texto atras|3d depth|depth text|profundidade)/.test(lower)) {
+    saveUndoSnapshot();
+    DepthTextEngine.toggle(true);
+    appendCopilotMsg("bot", "👤 Efeito <b>Texto Atrás da Pessoa (3D)</b> ativado! O texto agora fica entre você e o fundo.");
+    return true;
+  }
+
+  // 3. CORES (Legenda, Headline ou Geral)
+  const colorMap = [
+    { names: ["amarelo", "amarela", "yellow"], hex: "#ffe600", label: "amarelo" },
+    { names: ["vermelho", "vermelha", "red"], hex: "#ff2a55", label: "vermelho" },
+    { names: ["verde limao", "verde-limao", "verde"], hex: "#00ff66", label: "verde" },
+    { names: ["azul royal", "azul-royal", "azul"], hex: "#0099ff", label: "azul" },
+    { names: ["branco", "branca", "white"], hex: "#ffffff", label: "branco" },
+    { names: ["laranja", "orange"], hex: "#ff6a00", label: "laranja" },
+    { names: ["ciano", "cyan"], hex: "#00d2b4", label: "ciano" },
+    { names: ["preto", "preta", "black"], hex: "#000000", label: "preto" },
+    { names: ["roxo", "roxa", "purple", "violeta"], hex: "#b026ff", label: "roxo" },
+    { names: ["ouro", "dourado", "gold"], hex: "#ffd700", label: "dourado" }
+  ];
+
+  let matchedColor = null;
+  for (const c of colorMap) {
+    for (const n of c.names) {
+      if (new RegExp(`\\b${n}\\b`).test(lower)) {
+        matchedColor = c;
+        break;
+      }
+    }
+    if (matchedColor) break;
+  }
+
+  if (matchedColor) {
+    saveUndoSnapshot();
+    const isHeadline = /(headline|titulo|head)/.test(lower);
+    const isSubtitle = /(legenda|sub|subtitulo|texto da legenda)/.test(lower);
+
+    if (isHeadline && !isSubtitle) {
+      syncHeadlineColor(matchedColor.hex, null);
+      appendCopilotMsg("bot", `🎨 Cor da Headline alterada para <b>${matchedColor.label}</b> (${matchedColor.hex})!`);
+      return true;
+    } else if (isSubtitle && !isHeadline) {
+      syncSubtitleColors(matchedColor.hex, matchedColor.hex, null);
+      appendCopilotMsg("bot", `🎨 Cor da Legenda alterada para <b>${matchedColor.label}</b> (${matchedColor.hex})!`);
+      return true;
+    } else if (/(cor|mudar cor|alterar cor|pintar|trocar cor)/.test(lower)) {
+      syncSubtitleColors(matchedColor.hex, matchedColor.hex, null);
+      syncHeadlineColor(matchedColor.hex, null);
+      appendCopilotMsg("bot", `🎨 Cor dos textos (Headline e Legenda) alterada para <b>${matchedColor.label}</b> (${matchedColor.hex})!`);
+      return true;
+    }
+  }
+
+  // 4. VOLUME DA MÚSICA
+  const volMatch = lower.match(/(?:volume|musica|som).*?(\d+)\s*%?/);
+  if (volMatch) {
+    saveUndoSnapshot();
+    let num = parseInt(volMatch[1], 10);
+    let volVal = num > 1 ? (num / 100) : num;
+    volVal = Math.max(0, Math.min(1.0, Math.round(volVal * 100) / 100));
+    S.musicVol = volVal;
+    const mVol = $("#musicVol");
+    if (mVol) {
+      mVol.value = volVal;
+      mVol.dispatchEvent(new Event("input", { bubbles: true }));
+      mVol.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    drawTL();
+    appendCopilotMsg("bot", `🎵 Volume da música ajustado para <b>${Math.round(volVal * 100)}%</b>.`);
+    return true;
+  }
+  if (/(abaixar|diminuir|reduzir).*(musica|volume|som)/.test(lower)) {
+    saveUndoSnapshot();
+    let curVol = S.musicVol !== undefined ? S.musicVol : ($("#musicVol") ? +$("#musicVol").value : 0.15);
+    let newVol = Math.max(0, Math.round((curVol - 0.05) * 100) / 100);
+    S.musicVol = newVol;
+    const mVol = $("#musicVol");
+    if (mVol) {
+      mVol.value = newVol;
+      mVol.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    drawTL();
+    appendCopilotMsg("bot", `🔉 Volume da música reduzido para <b>${Math.round(newVol * 100)}%</b>.`);
+    return true;
+  }
+  if (/(aumentar|subir).*(musica|volume|som)/.test(lower)) {
+    saveUndoSnapshot();
+    let curVol = S.musicVol !== undefined ? S.musicVol : ($("#musicVol") ? +$("#musicVol").value : 0.15);
+    let newVol = Math.min(1.0, Math.round((curVol + 0.05) * 100) / 100);
+    S.musicVol = newVol;
+    const mVol = $("#musicVol");
+    if (mVol) {
+      mVol.value = newVol;
+      mVol.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    drawTL();
+    appendCopilotMsg("bot", `🔊 Volume da música aumentado para <b>${Math.round(newVol * 100)}%</b>.`);
+    return true;
+  }
+
+  // 5. TAMANHO DA FONTE / ESCALA
+  const pctMatch = lower.match(/(?:para|em|a)?\s*(\d+)\s*%/);
+  const isScaleUp = /(aumentar|maior|crescer|subir)/.test(lower);
+  const isScaleDown = /(diminuir|menor|reduzir|abaixar)/.test(lower);
+  const isFonte = /(fonte|tamanho|escala|letra)/.test(lower);
+  const isSubTarget = /(legenda|sub)/.test(lower);
+  const isHlTarget = /(headline|titulo)/.test(lower);
+
+  if (isFonte || isScaleUp || isScaleDown || pctMatch) {
+    if (pctMatch && (isSubTarget || isHlTarget || isFonte)) {
+      saveUndoSnapshot();
+      const targetPct = parseInt(pctMatch[1], 10);
+      if (isSubTarget || (!isHlTarget && isFonte)) {
+        setSubtitleScale(targetPct);
+      }
+      if (isHlTarget || (!isSubTarget && isFonte)) {
+        setHeadlineScale(targetPct);
+      }
+      appendCopilotMsg("bot", `📏 Tamanho ajustado para <b>${targetPct}%</b>.`);
+      return true;
+    }
+    if (isScaleUp && (isFonte || isSubTarget || isHlTarget)) {
+      saveUndoSnapshot();
+      if (isHlTarget && !isSubTarget) {
+        const curPct = Math.round((S.hlScale || 1.0) * 100) + 15;
+        setHeadlineScale(curPct);
+        appendCopilotMsg("bot", `📏 Tamanho da headline aumentado para <b>${curPct}%</b>.`);
+      } else if (isSubTarget && !isHlTarget) {
+        const curPct = Math.round((S.subScale || 1.0) * 100) + 15;
+        setSubtitleScale(curPct);
+        appendCopilotMsg("bot", `📏 Tamanho da legenda aumentado para <b>${curPct}%</b>.`);
+      } else {
+        const curSub = Math.round((S.subScale || 1.0) * 100) + 15;
+        const curHl = Math.round((S.hlScale || 1.0) * 100) + 15;
+        setSubtitleScale(curSub);
+        setHeadlineScale(curHl);
+        appendCopilotMsg("bot", `📏 Tamanho dos textos aumentado em +15%.`);
+      }
+      return true;
+    }
+    if (isScaleDown && (isFonte || isSubTarget || isHlTarget)) {
+      saveUndoSnapshot();
+      if (isHlTarget && !isSubTarget) {
+        const curPct = Math.max(50, Math.round((S.hlScale || 1.0) * 100) - 15);
+        setHeadlineScale(curPct);
+        appendCopilotMsg("bot", `📏 Tamanho da headline reduzido para <b>${curPct}%</b>.`);
+      } else if (isSubTarget && !isHlTarget) {
+        const curPct = Math.max(50, Math.round((S.subScale || 1.0) * 100) - 15);
+        setSubtitleScale(curPct);
+        appendCopilotMsg("bot", `📏 Tamanho da legenda reduzido para <b>${curPct}%</b>.`);
+      } else {
+        const curSub = Math.max(50, Math.round((S.subScale || 1.0) * 100) - 15);
+        const curHl = Math.max(50, Math.round((S.hlScale || 1.0) * 100) - 15);
+        setSubtitleScale(curSub);
+        setHeadlineScale(curHl);
+        appendCopilotMsg("bot", `📏 Tamanho dos textos reduzido em -15%.`);
+      }
+      return true;
+    }
+  }
+
+  // 6. EFEITOS SONOROS (SFX)
+  if (/(whoosh|pop|ding|boom|transicao|sfx|efeito sonoro|som|glitch|click)/.test(lower)) {
+    saveUndoSnapshot();
+    let sfxId = "whoosh_curto";
+    if (lower.includes("whoosh grave")) sfxId = "whoosh_grave";
+    else if (lower.includes("whoosh")) sfxId = "whoosh_curto";
+    else if (lower.includes("pop")) sfxId = "pop";
+    else if (lower.includes("ding") || lower.includes("sino")) sfxId = "ding";
+    else if (lower.includes("boom") || lower.includes("impacto")) sfxId = "boom";
+    else if (lower.includes("glitch")) sfxId = "glitch_impacto";
+    else if (lower.includes("click") || lower.includes("clique")) sfxId = "click_mouse";
+
+    SFXEngine.addTimelineItem(sfxId, curTime, 0.8);
+    appendCopilotMsg("bot", `🔊 Efeito sonoro <b>"${sfxId}"</b> inserido na timeline em ${fmt(curTime)} e reproduzido!`);
+    return true;
+  }
+
+  // 7. ESTILOS DE LEGENDA
+  if (/(legenda|estilo de legenda|subtitulo)/.test(lower)) {
+    let newCap = null;
+    let capLabel = "";
+    if (/(sem legenda|tirar legenda|remover legenda|nenhuma)/.test(lower)) {
+      newCap = "nenhuma";
+      capLabel = "Sem Legenda";
+    } else if (/(hormozi)/.test(lower)) {
+      newCap = "hormozi";
+      capLabel = "Hormozi Viral";
+    } else if (/(pop in|pop)/.test(lower)) {
+      newCap = "pop_in";
+      capLabel = "Pop In Elástico";
+    } else if (/(ciano)/.test(lower)) {
+      newCap = "karaoke_ciano";
+      capLabel = "Karaokê Ciano";
+    } else if (/(neon)/.test(lower)) {
+      newCap = "karaoke_neon";
+      capLabel = "Karaokê Neon";
+    } else if (/(verde|limao)/.test(lower)) {
+      newCap = "verde_limao";
+      capLabel = "Verde Limão";
+    } else if (/(rubi|vermelh)/.test(lower)) {
+      newCap = "rubi_impacto";
+      capLabel = "Rubi Impacto";
+    } else if (/(ouro|dourad)/.test(lower)) {
+      newCap = "ouro_premium";
+      capLabel = "Dourado Premium";
+    } else if (/(azul)/.test(lower)) {
+      newCap = "azul_royal";
+      capLabel = "Azul Royal";
+    } else if (/(caixa preta)/.test(lower)) {
+      newCap = "caixa_preta_sub";
+      capLabel = "Caixa Preta";
+    } else if (/(destaque|karaoke destaque)/.test(lower)) {
+      newCap = "karaoke_highlight";
+      capLabel = "Karaokê Destaque";
+    }
+
+    if (newCap) {
+      saveUndoSnapshot();
+      S.cap = newCap;
+      S.captionDisabled = (newCap === "nenhuma");
+      const capSel = $("#visualCapStyleSelect");
+      if (capSel) capSel.value = newCap;
+      drawOptions();
+      updateSubtitleOverlayAtTime(curTime);
+      appendCopilotMsg("bot", `📝 Estilo da legenda alterado para <b>${capLabel}</b>!`);
+      return true;
+    }
+  }
+
+  // 8. CORTAR SILÊNCIOS / RESPIROS
+  if (/(cortar silencios|corte os silencios|cortar respiros|silencios|respiros)/.test(lower)) {
+    saveUndoSnapshot();
+    S.el.cutSilence = 1;
+    if (S.vid) {
+      post("/api/detect_silences", { video_id: S.vid }).then(data => {
+        if (data && data.effective_silences) {
+          S.silenceIntervals = data.effective_silences;
+          drawTL();
+        }
+      }).catch(() => {});
+    }
+    drawOptions();
+    drawTL();
+    appendCopilotMsg("bot", `✂️ <b>Corte de silêncios e respiros</b> ativado! Trechos vazios serão ignorados na edição.`);
+    return true;
+  }
+
+  // 9. GERAR HEADLINES VIRAIS
+  if (/(gerar headline|headlines|sugerir headline|headline viral|headline magnetica)/.test(lower)) {
+    saveUndoSnapshot();
+    if (S.vid && S.segs && S.segs.length) {
+      appendCopilotMsg("bot", "💡 Analisando transcrição para sugerir headlines...");
+      post("/api/ai/edit_brain", { video_id: S.vid, segments: S.segs }).then(data => {
+        if (data && data.headlines && data.headlines.length) {
+          const topHl = data.headlines[0];
+          if ($("#visualHlText")) $("#visualHlText").value = topHl;
+          if ($("#hlText")) $("#hlText").value = topHl;
+          updateHeadlineOverlay();
+          let hlListHtml = data.headlines.map(h => `<li><b>${h}</b></li>`).join("");
+          appendCopilotMsg("bot", `💡 <b>Headlines Sugeridas:</b><ul>${hlListHtml}</ul>A headline <b>"${topHl}"</b> foi aplicada!`);
+        } else {
+          applyFallbackHeadline();
+        }
+      }).catch(() => {
+        applyFallbackHeadline();
+      });
+      return true;
+    } else {
+      applyFallbackHeadline();
+      return true;
+    }
+  }
+
+  // 10. ANIMAÇÕES / LOTTIE / SETAS
+  if (/(seta|apontar|alerta|fogo|emoji|animacao|sticker)/.test(lower)) {
+    let animId = "arrow_neon";
+    if (lower.includes("alerta") || lower.includes("aviso")) animId = "warning_alert";
+    else if (lower.includes("fogo")) animId = "fire_flame";
+    else if (lower.includes("confete") || lower.includes("festa")) animId = "confetti_blast";
+    else if (lower.includes("like") || lower.includes("coracao")) animId = "like_heart";
+
+    LottieEngine.play(animId);
+    appendCopilotMsg("bot", `🎯 Animação <b>${animId}</b> exibida na tela!`);
+    return true;
+  }
+
+  return false;
+}
+
+async function handleCopilotCommand(text) {
+  if (!text || !text.trim()) return;
+  const trimmed = text.trim();
+  appendCopilotMsg("user", trimmed);
+
+  const pvVideo = $("#pv") || $("#previewPlayer");
+  const curTime = pvVideo ? pvVideo.currentTime : 0;
+
+  // Executa localmente sem depender de servidor
+  const handled = parseAndExecuteCopilotCommand(trimmed);
+  if (handled) return;
+
+  // Fallback opcional para Ollama/Backend se o comando for mais complexo
   try {
     const res = await post("/api/ai/copilot", {
-      message: text.trim(),
+      message: trimmed,
       current_state: {
         time: curTime,
         hl: S.hl,
@@ -3618,16 +4125,19 @@ async function handleCopilotCommand(text) {
       }
     });
 
-    if (res && res.actions) {
+    if (res && res.actions && res.actions.length) {
+      saveUndoSnapshot();
       for (const act of res.actions) {
         executeCopilotAction(act, curTime);
       }
       appendCopilotMsg("bot", res.reply || "Ação executada com sucesso!");
+    } else if (res && res.reply) {
+      appendCopilotMsg("bot", res.reply);
     } else {
-      appendCopilotMsg("bot", "Comando recebido e aplicado.");
+      appendCopilotMsg("bot", "💡 Dica: Você pode pedir para mudar cor da legenda ou headline, colocar texto atrás de você (3D), ajustar o volume da música, cortar silêncios, ou adicionar efeitos sonoros (whoosh, pop).");
     }
   } catch (err) {
-    appendCopilotMsg("bot", "Desculpe, erro ao processar o comando: " + err.message);
+    appendCopilotMsg("bot", "💡 Dica: Experimente comandos diretos como 'mude a legenda para amarelo', 'texto atrás de mim', 'volume 20%', 'adicione whoosh' ou 'desfazer'.");
   }
 }
 
@@ -3663,13 +4173,19 @@ function executeCopilotAction(act, curTime) {
       break;
 
     case "subtitle_color":
-      S.subColor = act.color;
-      updateSubtitleOverlayAtTime(curTime);
+      syncSubtitleColors(act.color, act.color, null);
+      break;
+
+    case "headline_color":
+      syncHeadlineColor(act.color, null);
       break;
 
     case "subtitle_scale_step":
-      S.subScale = Math.max(0.5, Math.min(2.5, (S.subScale || 1.0) + (act.delta / 100.0)));
-      updateSubtitleOverlayAtTime(curTime);
+      setSubtitleScale(Math.round(((S.subScale || 1.0) + (act.delta / 100.0)) * 100));
+      break;
+
+    case "headline_scale_step":
+      setHeadlineScale(Math.round(((S.hlScale || 1.0) + (act.delta / 100.0)) * 100));
       break;
 
     case "add_sfx":
@@ -3681,24 +4197,14 @@ function executeCopilotAction(act, curTime) {
       break;
 
     case "generate_headlines":
-      if (S.vid && S.segs && S.segs.length) {
-        post("/api/ai/edit_brain", { video_id: S.vid, segments: S.segs }).then(data => {
-          if (data && data.headlines && data.headlines.length) {
-            const topHl = data.headlines[0];
-            if ($("#visualHlText")) $("#visualHlText").value = topHl;
-            if ($("#hlText")) $("#hlText").value = topHl;
-            updateHeadlineOverlay();
-            let hlListHtml = data.headlines.map(h => `<li><b>${h}</b></li>`).join("");
-            appendCopilotMsg("bot", `💡 <b>Headlines Sugeridas:</b><ul>${hlListHtml}</ul>A primeira opção foi aplicada!`);
-          }
-        }).catch(() => {});
-      }
+      applyFallbackHeadline();
       break;
 
     case "music_volume":
       S.musicVol = act.volume;
       const mVol = $("#musicVol");
       if (mVol) mVol.value = act.volume;
+      drawTL();
       break;
 
     case "set_tipo":
@@ -3712,14 +4218,13 @@ function executeCopilotAction(act, curTime) {
   }
 }
 
-// Reconhecimento de Voz Local (Web Speech API com fallback Faster-Whisper)
+// Reconhecimento de Voz Local (Web Speech API nativo pt-BR com preenchimento direto no input e auto-execução)
 let speechRec = null;
-let mediaRecorder = null;
-let audioChunks = [];
 
 function initVoiceRecognition() {
   const micBtn = $("#btnCopilotMic");
   const waveform = $("#voiceWaveform");
+  const copilotInp = $("#copilotInput");
   if (!micBtn) return;
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -3736,8 +4241,11 @@ function initVoiceRecognition() {
     };
 
     speechRec.onresult = e => {
-      const transcript = e.results[0][0].transcript;
-      handleCopilotCommand(transcript);
+      if (e.results && e.results[0] && e.results[0][0]) {
+        const transcript = e.results[0][0].transcript;
+        if (copilotInp) copilotInp.value = transcript;
+        handleCopilotCommand(transcript);
+      }
     };
 
     speechRec.onerror = err => {
@@ -3755,59 +4263,20 @@ function initVoiceRecognition() {
       if (micBtn.classList.contains("is-recording")) {
         speechRec.stop();
       } else {
-        speechRec.start();
-      }
-    };
-  } else {
-    micBtn.onclick = async () => {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-        micBtn.classList.remove("is-recording");
-        if (waveform) waveform.style.display = "none";
-      } else {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
-          audioChunks = [];
-
-          mediaRecorder.ondataavailable = ev => {
-            if (ev.data.size > 0) audioChunks.push(ev.data);
-          };
-
-          mediaRecorder.onstop = async () => {
-            const blob = new Blob(audioChunks, { type: "audio/webm" });
-            const formData = new FormData();
-            formData.append("audio", blob, "voice.webm");
-            appendCopilotMsg("user", "🎤 <i>Processando áudio local...</i>");
-
-            try {
-              const res = await fetch("/api/voice_command", { method: "POST", body: formData }).then(r => r.json());
-              if (res && res.transcript) {
-                appendCopilotMsg("user", `"${res.transcript}"`);
-                if (res.actions) {
-                  const pvVideo = $("#pv") || $("#previewPlayer");
-                  const curTime = pvVideo ? pvVideo.currentTime : 0;
-                  for (const act of res.actions) {
-                    executeCopilotAction(act, curTime);
-                  }
-                  appendCopilotMsg("bot", res.reply || "Comando executado!");
-                }
-              }
-            } catch (err) {
-              appendCopilotMsg("bot", "Erro ao processar comando de voz: " + err.message);
-            }
-          };
-
-          mediaRecorder.start();
-          micBtn.classList.add("is-recording");
-          if (waveform) waveform.style.display = "flex";
-        } catch (ex) {
-          alert("Não foi possível acessar o microfone.");
+          speechRec.start();
+        } catch (e) {
+          console.warn("SpeechRec start error:", e);
         }
       }
     };
+  } else {
+    micBtn.onclick = () => {
+      appendCopilotMsg("bot", "🎙️ Reconhecimento de voz não suportado neste navegador. Digite seu comando diretamente no campo de texto.");
+    };
   }
 }
+
 
 async function loadAssetsLibrary() {
   try {
