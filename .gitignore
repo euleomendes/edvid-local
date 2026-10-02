@@ -31,4 +31,5 @@ Thumbs.db
 
 # Logs e arquivos de execução
 *.log
+*.ses
 scratch/
